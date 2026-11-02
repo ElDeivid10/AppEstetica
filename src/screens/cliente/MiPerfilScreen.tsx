@@ -46,6 +46,7 @@ function FavoritosModal({ visible, onClose }: { visible: boolean; onClose: () =>
         </View>
         {activeTab === 'servicios'
           ? <FlatList
+              key="servicios-flatlist"
               data={FAV_SERVICES}
               keyExtractor={item => item.id}
               contentContainerStyle={m.list}
@@ -61,6 +62,7 @@ function FavoritosModal({ visible, onClose }: { visible: boolean; onClose: () =>
               )}
             />
           : <FlatList
+              key="productos-flatlist"
               data={FAV_PRODUCTS}
               keyExtractor={item => item.id}
               numColumns={2}

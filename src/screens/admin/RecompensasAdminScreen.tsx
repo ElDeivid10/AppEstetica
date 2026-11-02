@@ -298,3 +298,4 @@ const s = StyleSheet.create({
   emptyTitle: { color: colors.ink[800], fontSize: 15, fontWeight: '700' },
   note: { textAlign: 'center', color: colors.beige[500], fontSize: 10, lineHeight: 15 },
 });
+

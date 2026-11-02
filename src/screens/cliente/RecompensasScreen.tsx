@@ -268,3 +268,4 @@ const s = StyleSheet.create({
 
   disclaimer: { textAlign: 'center', color: colors.beige[500], fontSize: 10, lineHeight: 15 },
 });
+
