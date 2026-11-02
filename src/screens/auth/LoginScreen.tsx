@@ -89,7 +89,7 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
   const [passwordFocused, setPasswordFocused] = useState(false);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
-  const passwordRef = useRef<TextInput>(null);
+  const passwordRef = useRef<any>(null);
 
   const titleFont  = fontsLoaded ? fonts.title  : theme.fontFallback.title;
   const bodyFont   = fontsLoaded ? fonts.body    : theme.fontFallback.body;

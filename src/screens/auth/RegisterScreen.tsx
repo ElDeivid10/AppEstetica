@@ -121,13 +121,13 @@ export default function RegisterScreen({ onNavigateToLogin }: Props) {
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
   // ── Refs para avanzar con Return ──────────────
-  const refs: Record<string, React.RefObject<TextInput | null>> = {
-    lastName: useRef<TextInput>(null),
-    phone:    useRef<TextInput>(null),
-    email:    useRef<TextInput>(null),
-    password: useRef<TextInput>(null),
-    confirm:  useRef<TextInput>(null),
-    allergies:useRef<TextInput>(null),
+  const refs: Record<string, React.RefObject<any>> = {
+    lastName: useRef<any>(null),
+    phone:    useRef<any>(null),
+    email:    useRef<any>(null),
+    password: useRef<any>(null),
+    confirm:  useRef<any>(null),
+    allergies:useRef<any>(null),
   };
 
   const set = (key: keyof typeof form) => (val: string) =>
