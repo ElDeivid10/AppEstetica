@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View, StyleSheet } from 'react-native';
+import { Text, View, StyleSheet, TouchableOpacity } from 'react-native';
 import { theme } from '@/constants/YossTheme';
 
 const { colors } = theme;
@@ -14,11 +14,23 @@ export function PageHeader({ eyebrow, title, subtitle }: { eyebrow: string; titl
   );
 }
 
-export function SectionTitle({ title, action }: { title: string; action?: string }) {
+export function SectionTitle({
+  title,
+  action,
+  onActionPress,
+}: {
+  title: string;
+  action?: string;
+  onActionPress?: () => void;
+}) {
   return (
     <View style={ui.sectionTitleRow}>
       <Text style={ui.sectionTitle}>{title}</Text>
-      {!!action && <Text style={ui.sectionAction}>{action}</Text>}
+      {!!action && (
+        <TouchableOpacity onPress={onActionPress} disabled={!onActionPress} activeOpacity={0.7}>
+          <Text style={ui.sectionAction}>{action}</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }

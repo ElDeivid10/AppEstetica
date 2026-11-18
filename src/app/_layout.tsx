@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { SalonProvider, useSalon } from '@/context/SalonContext';
 import LoginScreen from '@/screens/auth/LoginScreen';
 import RegisterScreen from '@/screens/auth/RegisterScreen';
 
@@ -18,10 +19,12 @@ import MisCitasScreen      from '@/screens/cliente/MisCitasScreen';
 import RecompensasScreen   from '@/screens/cliente/RecompensasScreen';
 import ServiciosScreen     from '@/screens/cliente/ServiciosScreen';
 import MiPerfilScreen      from '@/screens/cliente/MiPerfilScreen';
+import AgendarCitaScreen   from '@/screens/cliente/AgendarCitaScreen';
 
 // ── Pantallas Admin ────────────────────────────────────────────────────────────
 import AgendaYossScreen        from '@/screens/admin/AgendaYossScreen';
 import ExpedientesScreen       from '@/screens/admin/ExpedientesScreen';
+import MensajesAdminScreen     from '@/screens/admin/MensajesAdminScreen';
 import PanelGestionScreen      from '@/screens/admin/PanelGestionScreen';
 import RecompensasAdminScreen  from '@/screens/admin/RecompensasAdminScreen';
 
@@ -32,7 +35,14 @@ const { colors, borderRadius, shadow, spacing } = theme;
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 type AuthScreen  = 'login' | 'register';
 type ClienteTab  = 'explorar' | 'citas' | 'recompensas' | 'servicios' | 'perfil';
-type AdminTab    = 'agenda' | 'expedientes' | 'recompensas' | 'panel';
+type AdminTab    = 'agenda' | 'expedientes' | 'mensajes' | 'recompensas' | 'panel';
+
+interface AgendarParams {
+  fecha?: string;
+  servicioId?: string;
+  isRecompensa?: boolean;
+  recompensaNombre?: string;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  FLUJO DE AUTENTICACIÓN
@@ -50,6 +60,8 @@ function AuthNavigator() {
 // ─────────────────────────────────────────────────────────────────────────────
 function ClienteNavigator() {
   const [activeTab, setActiveTab] = useState<ClienteTab>('explorar');
+  const [showAgendar, setShowAgendar] = useState(false);
+  const [agendarParams, setAgendarParams] = useState<AgendarParams | null>(null);
 
   type ClienteTabDef = { key: ClienteTab; label: string; icon: string; center?: boolean };
   const tabs: ClienteTabDef[] = [
@@ -60,78 +72,120 @@ function ClienteNavigator() {
     { key: 'perfil',      label: 'Mi Perfil',   icon: '👤' },
   ];
 
+  function handleNavigateToAgendar(params?: string | AgendarParams) {
+    if (typeof params === 'string') {
+      setAgendarParams({ fecha: params });
+    } else if (params) {
+      setAgendarParams(params);
+    } else {
+      setAgendarParams(null);
+    }
+    setShowAgendar(true);
+  }
+
+  function handleAgendarBack() {
+    setShowAgendar(false);
+    setAgendarParams(null);
+    setActiveTab('citas');
+  }
+
   const renderScreen = () => {
     switch (activeTab) {
-      case 'explorar':    return <ExplorarScreen />;
-      case 'citas':       return <MisCitasScreen />;
-      case 'recompensas': return <RecompensasScreen />;
-      case 'servicios':   return <ServiciosScreen />;
-      case 'perfil':      return <MiPerfilScreen />;
+      case 'explorar':
+        return (
+          <ExplorarScreen
+            onNavigateTab={(tab) => setActiveTab(tab)}
+            onNavigateToAgendar={handleNavigateToAgendar}
+          />
+        );
+      case 'citas':
+        return <MisCitasScreen onNavigateToAgendar={handleNavigateToAgendar} />;
+      case 'recompensas':
+        return <RecompensasScreen onNavigateToAgendar={handleNavigateToAgendar} />;
+      case 'servicios':
+        return <ServiciosScreen onNavigateToAgendar={handleNavigateToAgendar} />;
+      case 'perfil':
+        return <MiPerfilScreen />;
     }
   };
 
   return (
     <SafeAreaView style={s.safeArea}>
-      <View style={s.screenContainer}>{renderScreen()}</View>
+      {showAgendar ? (
+        <AgendarCitaScreen
+          onNavigateBack={handleAgendarBack}
+          fechaInicial={agendarParams?.fecha}
+          servicioInicialId={agendarParams?.servicioId}
+          isRecompensa={agendarParams?.isRecompensa}
+          recompensaNombre={agendarParams?.recompensaNombre}
+        />
+      ) : (
+        <View style={s.screenContainer}>{renderScreen()}</View>
+      )}
 
-      <View style={s.tabBar}>
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.key;
+      {/* Tab bar oculta en formulario de agendado para experiencia full-screen */}
+      {!showAgendar && (
+        <View style={s.tabBar}>
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.key;
 
-          // ── Tab central de Recompensas (estilo Cinépolis FAB) ──
-          if (tab.center) {
+            // Tab central de Recompensas
+            if (tab.center) {
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={s.centerTabWrapper}
+                  onPress={() => setActiveTab(tab.key)}
+                  activeOpacity={0.85}
+                  accessible
+                  accessibilityLabel={tab.label}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <View style={[s.centerTab, isActive && s.centerTabActive]}>
+                    <Text style={s.centerTabIcon}>{tab.icon}</Text>
+                  </View>
+                  <Text style={[s.centerTabLabel, isActive && s.centerTabLabelActive]}>
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }
+
             return (
               <TouchableOpacity
                 key={tab.key}
-                style={s.centerTabWrapper}
+                style={s.tabItem}
                 onPress={() => setActiveTab(tab.key)}
-                activeOpacity={0.85}
+                activeOpacity={0.7}
                 accessible
                 accessibilityLabel={tab.label}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isActive }}
               >
-                <View style={[s.centerTab, isActive && s.centerTabActive]}>
-                  <Text style={s.centerTabIcon}>{tab.icon}</Text>
-                </View>
-                <Text style={[s.centerTabLabel, isActive && s.centerTabLabelActive]}>
-                  {tab.label}
-                </Text>
+                {isActive && <View style={s.tabIndicator} />}
+                <Text style={[s.tabIcon, isActive && s.tabIconActive]}>{tab.icon}</Text>
+                <Text style={[s.tabLabel, isActive && s.tabLabelActive]}>{tab.label}</Text>
               </TouchableOpacity>
             );
-          }
-
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={s.tabItem}
-              onPress={() => setActiveTab(tab.key)}
-              activeOpacity={0.7}
-              accessible
-              accessibilityLabel={tab.label}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isActive }}
-            >
-              {isActive && <View style={s.tabIndicator} />}
-              <Text style={[s.tabIcon, isActive && s.tabIconActive]}>{tab.icon}</Text>
-              <Text style={[s.tabLabel, isActive && s.tabLabelActive]}>{tab.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+          })}
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  NAVEGACIÓN ADMIN
+//  NAVEGACIÓN ADMIN — Con Bandeja de Mensajes integrada
 // ─────────────────────────────────────────────────────────────────────────────
 function AdminNavigator() {
   const [activeTab, setActiveTab] = useState<AdminTab>('agenda');
+  const { unreadAdminCount } = useSalon();
 
-  const tabs: { key: AdminTab; label: string; icon: string }[] = [
+  const tabs: { key: AdminTab; label: string; icon: string; badge?: number }[] = [
     { key: 'agenda',       label: 'Agenda',       icon: '🗓️' },
     { key: 'expedientes',  label: 'Expedientes',  icon: '📋' },
+    { key: 'mensajes',     label: 'Mensajes',     icon: '💬', badge: unreadAdminCount },
     { key: 'recompensas',  label: 'Beneficios',   icon: '✦' },
     { key: 'panel',        label: 'Panel',        icon: '⚙️' },
   ];
@@ -140,6 +194,7 @@ function AdminNavigator() {
     switch (activeTab) {
       case 'agenda':      return <AgendaYossScreen />;
       case 'expedientes': return <ExpedientesScreen />;
+      case 'mensajes':    return <MensajesAdminScreen />;
       case 'recompensas': return <RecompensasAdminScreen />;
       case 'panel':       return <PanelGestionScreen />;
     }
@@ -166,7 +221,14 @@ function AdminNavigator() {
               accessibilityState={{ selected: isActive }}
             >
               {isActive && <View style={s.tabIndicatorAdmin} />}
-              <Text style={[s.tabIcon, isActive && s.tabIconActive]}>{tab.icon}</Text>
+              <View style={{ position: 'relative' }}>
+                <Text style={[s.tabIcon, isActive && s.tabIconActive]}>{tab.icon}</Text>
+                {tab.badge && tab.badge > 0 ? (
+                  <View style={s.tabBadgeAdmin}>
+                    <Text style={s.tabBadgeAdminText}>{tab.badge}</Text>
+                  </View>
+                ) : null}
+              </View>
               <Text style={[s.tabLabel, isActive && s.tabLabelActive]}>{tab.label}</Text>
             </TouchableOpacity>
           );
@@ -213,7 +275,9 @@ function RootRouter() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <RootRouter />
+      <SalonProvider>
+        <RootRouter />
+      </SalonProvider>
     </AuthProvider>
   );
 }
@@ -228,11 +292,11 @@ const s = StyleSheet.create({
   safeAreaAdmin: { backgroundColor: colors.ink[50] },
   screenContainer: { flex: 1 },
 
-  // ── Admin banner ──
+  // Admin banner
   adminBanner: { backgroundColor: colors.ink[800], paddingVertical: 7, alignItems: 'center' },
   adminBannerText: { color: colors.primary[300], fontSize: 10, fontWeight: '600', letterSpacing: 2.5 },
 
-  // ── Tab Bar base ──
+  // Tab Bar base
   tabBar: {
     flexDirection: 'row',
     height: TABBAR_HEIGHT,
@@ -249,7 +313,6 @@ const s = StyleSheet.create({
     borderTopColor: colors.beige[200],
   },
 
-  // ── Tab item normal ──
   tabItem: {
     flex: 1,
     alignItems: 'center',
@@ -274,12 +337,26 @@ const s = StyleSheet.create({
     backgroundColor: colors.primary[600],
     borderRadius: borderRadius.pill,
   },
-  tabIcon:        { fontSize: 20, opacity: 0.4 },
+  tabIcon:        { fontSize: 19, opacity: 0.45 },
   tabIconActive:  { opacity: 1 },
   tabLabel:       { fontSize: 9, color: colors.beige[400], marginTop: 2, fontWeight: '500' },
   tabLabelActive: { color: colors.primary[500], fontWeight: '700' },
 
-  // ── Tab CENTRAL (Recompensas) estilo FAB ──
+  tabBadgeAdmin: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    backgroundColor: colors.status.error,
+    borderRadius: 8,
+    minWidth: 15,
+    height: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  tabBadgeAdminText: { color: colors.white, fontSize: 8, fontWeight: '800' },
+
+  // Tab Central (Recompensas)
   centerTabWrapper: {
     flex: 1.2,
     alignItems: 'center',
@@ -288,16 +365,15 @@ const s = StyleSheet.create({
     position: 'relative',
   },
   centerTab: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.primary[500],
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,
     ...shadow.button,
-    // Flota sobre el tabBar
-    marginTop: -24,
+    marginTop: -22,
   },
   centerTabActive: {
     backgroundColor: colors.primary[600],
@@ -307,7 +383,7 @@ const s = StyleSheet.create({
   centerTabLabel: { fontSize: 9, color: colors.beige[400], fontWeight: '600' },
   centerTabLabelActive: { color: colors.primary[500], fontWeight: '700' },
 
-  // ── Cuenta bloqueada ──
+  // Cuenta bloqueada
   blockedContainer: { flex: 1, backgroundColor: colors.beige[50], alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   blockedIcon: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderColor: colors.status.error, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.lg },
   blockedBar: { width: 24, height: 3, backgroundColor: colors.status.error, borderRadius: 2 },
