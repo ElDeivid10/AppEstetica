@@ -4,12 +4,25 @@ import { theme } from '@/constants/YossTheme';
 
 const { colors } = theme;
 
-export function PageHeader({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle?: string }) {
+export function PageHeader({
+  eyebrow,
+  title,
+  subtitle,
+  rightElement,
+}: {
+  eyebrow: string;
+  title: string;
+  subtitle?: string;
+  rightElement?: React.ReactNode;
+}) {
   return (
-    <View style={ui.header}>
-      <Text style={ui.eyebrow}>{eyebrow.toUpperCase()}</Text>
-      <Text style={ui.title}>{title}</Text>
-      {!!subtitle && <Text style={ui.subtitle}>{subtitle}</Text>}
+    <View style={[ui.header, rightElement ? { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 } : null]}>
+      <View style={{ flex: 1, gap: 4 }}>
+        <Text style={ui.eyebrow}>{eyebrow.toUpperCase()}</Text>
+        <Text style={ui.title}>{title}</Text>
+        {!!subtitle && <Text style={ui.subtitle}>{subtitle}</Text>}
+      </View>
+      {rightElement}
     </View>
   );
 }

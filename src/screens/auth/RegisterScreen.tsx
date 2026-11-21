@@ -583,6 +583,9 @@ const s = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: Platform.OS === 'ios' ? 58 : 46,
     paddingBottom: spacing.xl,
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
   },
 
   // ── Header ────────────────────────────────────

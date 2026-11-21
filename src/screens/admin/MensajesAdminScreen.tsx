@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { PageHeader, StatusPill, pageStyles as p } from '@/components/SalonUI';
 import { useSalon, ChatMessage } from '@/context/SalonContext';
 import { theme } from '@/constants/YossTheme';
@@ -73,7 +74,7 @@ const CLIENT_LIST: ClientListItem[] = [
 ];
 
 export default function MensajesAdminScreen() {
-  const { messages, sendMessageAsAdmin, markAdminMessagesAsRead } = useSalon();
+  const { messages, sendMessageAsAdmin, markAdminMessagesAsRead, clientProfile } = useSalon();
   const [selectedClientId, setSelectedClientId] = useState('cli-ana');
   const [replyText, setReplyText] = useState('');
   const scrollRef = useRef<any>(null);
@@ -118,6 +119,8 @@ export default function MensajesAdminScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.clientsScroll}>
             {CLIENT_LIST.map(client => {
               const isSelected = selectedClientId === client.id;
+              const isMain = client.id === clientProfile.id;
+              const photo = isMain ? clientProfile.avatarUri : undefined;
               const unreadForThisClient = messages.filter(
                 m => m.clientId === client.id && !m.readByAdmin && m.sender === 'cliente'
               ).length;
@@ -130,9 +133,13 @@ export default function MensajesAdminScreen() {
                   activeOpacity={0.8}
                 >
                   <View style={[s.clientAvatar, isSelected && s.clientAvatarActive]}>
-                    <Text style={[s.clientInitials, isSelected && s.clientInitialsActive]}>
-                      {client.initials}
-                    </Text>
+                    {photo ? (
+                      <Image source={{ uri: photo }} style={s.clientPhoto} contentFit="cover" />
+                    ) : (
+                      <Text style={[s.clientInitials, isSelected && s.clientInitialsActive]}>
+                        {client.initials}
+                      </Text>
+                    )}
                     {unreadForThisClient > 0 && (
                       <View style={s.badgeNotification}>
                         <Text style={s.badgeNotificationText}>{unreadForThisClient}</Text>
@@ -299,7 +306,9 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    overflow: 'hidden',
   },
+  clientPhoto: { width: '100%', height: '100%', borderRadius: 22 },
   clientAvatarActive: { backgroundColor: colors.primary[500] },
   clientInitials: { color: colors.ink[800], fontSize: 13, fontWeight: '700' },
   clientInitialsActive: { color: colors.white },

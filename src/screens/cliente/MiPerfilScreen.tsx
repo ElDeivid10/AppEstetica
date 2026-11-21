@@ -17,11 +17,14 @@ import {
   TextInput,
   Modal,
   FlatList,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { PageHeader, SectionTitle, pageStyles as p } from '@/components/SalonUI';
 import { useAuth } from '@/context/AuthContext';
-import { useSalon } from '@/context/SalonContext';
+import { useSalon, AVATAR_PRESETS, AvatarPreset } from '@/context/SalonContext';
 import ChatClienteModal from '@/screens/cliente/ChatClienteModal';
 import { theme } from '@/constants/YossTheme';
 
@@ -58,6 +61,8 @@ export default function MiPerfilScreen() {
   const {
     clientProfile,
     updateClientProfile,
+    updateAvatar,
+    removeAvatar,
     favServices,
     favProducts,
     unreadClientCount,
@@ -67,6 +72,8 @@ export default function MiPerfilScreen() {
   const [saved, setSaved] = useState(false);
   const [showFavModal, setShowFavModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [isPickingImage, setIsPickingImage] = useState(false);
 
   // Form states
   const [name, setName] = useState(clientProfile.name);
@@ -78,6 +85,71 @@ export default function MiPerfilScreen() {
     updateClientProfile({ name, phone, allergies });
     setEditing(false);
     setSaved(true);
+  };
+
+  const handlePickCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permiso necesario',
+          'Para tomar una foto de perfil, concede permiso de cámara a Yoss Beauty Salon en los ajustes de tu dispositivo.'
+        );
+        return;
+      }
+      setIsPickingImage(true);
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        updateAvatar(result.assets[0].uri);
+        setShowAvatarModal(false);
+      }
+    } catch {
+      Alert.alert('Error', 'No se pudo acceder a la cámara.');
+    } finally {
+      setIsPickingImage(false);
+    }
+  };
+
+  const handlePickGallery = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permiso necesario',
+          'Para elegir una foto de tu galería, concede permiso de fotos a Yoss Beauty Salon en los ajustes de tu dispositivo.'
+        );
+        return;
+      }
+      setIsPickingImage(true);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        updateAvatar(result.assets[0].uri);
+        setShowAvatarModal(false);
+      }
+    } catch {
+      Alert.alert('Error', 'No se pudo acceder a tu galería de fotos.');
+    } finally {
+      setIsPickingImage(false);
+    }
+  };
+
+  const handleSelectPreset = (preset: AvatarPreset) => {
+    updateAvatar(preset.uri, preset.id);
+    setShowAvatarModal(false);
+  };
+
+  const handleResetToInitials = () => {
+    removeAvatar();
+    setShowAvatarModal(false);
   };
 
   const initials = clientProfile.name
@@ -102,13 +174,36 @@ export default function MiPerfilScreen() {
 
       {/* ── Tarjeta de Perfil ── */}
       <View style={[p.card, s.profileCard]}>
-        <View style={s.avatar}>
-          <Text style={s.avatarText}>{initials}</Text>
-        </View>
+        <TouchableOpacity
+          style={s.avatarWrap}
+          onPress={() => setShowAvatarModal(true)}
+          activeOpacity={0.8}
+        >
+          {clientProfile.avatarUri ? (
+            <Image
+              source={{ uri: clientProfile.avatarUri }}
+              style={s.avatarPhoto}
+              contentFit="cover"
+              transition={200}
+            />
+          ) : (
+            <View style={s.avatarFallback}>
+              <Text style={s.avatarText}>{initials}</Text>
+            </View>
+          )}
+          <View style={s.avatarBadge}>
+            <Text style={s.avatarBadgeIcon}>📷</Text>
+          </View>
+        </TouchableOpacity>
+
         <View style={{ flex: 1 }}>
           <Text style={s.profileName}>{clientProfile.name}</Text>
+          <TouchableOpacity onPress={() => setShowAvatarModal(true)} activeOpacity={0.7}>
+            <Text style={s.changePhotoText}>Cambiar foto de perfil</Text>
+          </TouchableOpacity>
           <Text style={p.muted}>Clienta desde octubre 2025</Text>
         </View>
+
         <TouchableOpacity
           style={p.outlineButton}
           onPress={() => {
@@ -316,6 +411,163 @@ export default function MiPerfilScreen() {
       {/* ── Modal de Chat & Mensajes ── */}
       <ChatClienteModal visible={showChatModal} onClose={() => setShowChatModal(false)} />
 
+      {/* ── Modal Selector de Foto de Perfil ── */}
+      <Modal
+        visible={showAvatarModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowAvatarModal(false)}
+      >
+        <View style={s.modalRoot}>
+          <View style={s.modalHeader}>
+            <View>
+              <Text style={s.modalHeaderTitle}>Foto de perfil</Text>
+              <Text style={s.modalHeaderSub}>Personaliza tu imagen en Yoss Beauty Salon</Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowAvatarModal(false)} style={s.modalCloseBtn}>
+              <Text style={s.modalCloseBtnText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={s.avatarModalScroll} showsVerticalScrollIndicator={false}>
+            {/* Vista previa actual */}
+            <View style={s.avatarPreviewCard}>
+              <View style={s.avatarPreviewBig}>
+                {clientProfile.avatarUri ? (
+                  <Image
+                    source={{ uri: clientProfile.avatarUri }}
+                    style={s.avatarPreviewPhoto}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                ) : (
+                  <View style={s.avatarPreviewFallback}>
+                    <Text style={s.avatarPreviewInitials}>{initials}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={s.avatarPreviewName}>{clientProfile.name}</Text>
+              <Text style={s.avatarPreviewState}>
+                {clientProfile.avatarUri
+                  ? (clientProfile.avatarPresetId ? 'Avatar boutique seleccionado' : 'Foto personalizada activa')
+                  : 'Iniciales con color de marca (predeterminado)'}
+              </Text>
+            </View>
+
+            {/* Opciones directas: Cámara / Galería / Restablecer */}
+            <Text style={s.modalSectionTitle}>TU PROPIA FOTO</Text>
+            <View style={s.avatarActionsCard}>
+              <TouchableOpacity
+                style={s.avatarActionRow}
+                onPress={handlePickCamera}
+                disabled={isPickingImage}
+                activeOpacity={0.7}
+              >
+                <View style={[s.actionIconWrap, { backgroundColor: colors.primary[50] }]}>
+                  <Text style={s.actionIcon}>📸</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.actionTitle}>Tomar con la cámara</Text>
+                  <Text style={s.actionSub}>Captura una selfie o retrato ahora</Text>
+                </View>
+                <Text style={s.actionArrow}>→</Text>
+              </TouchableOpacity>
+
+              <View style={s.actionDivider} />
+
+              <TouchableOpacity
+                style={s.avatarActionRow}
+                onPress={handlePickGallery}
+                disabled={isPickingImage}
+                activeOpacity={0.7}
+              >
+                <View style={[s.actionIconWrap, { backgroundColor: '#F0EEDC' }]}>
+                  <Text style={s.actionIcon}>🖼️</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.actionTitle}>Elegir de tu galería</Text>
+                  <Text style={s.actionSub}>Selecciona una imagen de tu dispositivo</Text>
+                </View>
+                <Text style={s.actionArrow}>→</Text>
+              </TouchableOpacity>
+
+              {!!clientProfile.avatarUri && (
+                <>
+                  <View style={s.actionDivider} />
+                  <TouchableOpacity
+                    style={s.avatarActionRow}
+                    onPress={handleResetToInitials}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[s.actionIconWrap, { backgroundColor: colors.beige[100] }]}>
+                      <Text style={s.actionIcon}>🔤</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.actionTitle}>Restablecer a iniciales</Text>
+                      <Text style={s.actionSub}>Mostrar {initials} con fondo verde oliva</Text>
+                    </View>
+                    <Text style={[s.actionArrow, { color: colors.status.error }]}>✕</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+
+            {/* Avatares predeterminados agrupados por categoría */}
+            <Text style={[s.modalSectionTitle, { marginTop: 22 }]}>O ELIGE UN AVATAR DE LA ESTÉTICA</Text>
+            <Text style={s.modalSectionDesc}>
+              Tres colecciones de estilos: salón, pinturas clásicas y animales:
+            </Text>
+
+            {([
+              { key: 'salon', label: '✂ ESTILOS DE SALÓN' },
+              { key: 'pinturas', label: '🖼 PINTURAS CLÁSICAS' },
+              { key: 'animales', label: '🦋 ANIMALES Y NATURALEZA' },
+            ] as const).map(({ key, label }) => (
+              <View key={key} style={s.presetCategory}>
+                <Text style={s.presetCategoryLabel}>{label}</Text>
+                <View style={s.presetsGrid}>
+                  {AVATAR_PRESETS.filter(p => p.category === key).map((preset) => {
+                    const isSelected = clientProfile.avatarUri === preset.uri;
+                    return (
+                      <TouchableOpacity
+                        key={preset.id}
+                        style={[s.presetCard, isSelected && s.presetCardSelected]}
+                        onPress={() => handleSelectPreset(preset)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={[s.presetPhotoWrap, isSelected && s.presetPhotoWrapSelected]}>
+                          <Image
+                            source={{ uri: preset.uri }}
+                            style={s.presetPhoto}
+                            contentFit="cover"
+                            transition={200}
+                          />
+                          {isSelected && (
+                            <View style={s.presetCheckBadge}>
+                              <Text style={s.presetCheckText}>✓</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[s.presetLabel, isSelected && s.presetLabelSelected]} numberOfLines={1}>
+                          {preset.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+
+            {isPickingImage && (
+              <View style={s.pickingOverlay}>
+                <ActivityIndicator size="large" color={colors.primary[500]} />
+                <Text style={s.pickingText}>Procesando imagen...</Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* ── Resumen Club Recompensas ── */}
       <View style={s.rewardCard}>
         <View style={s.rewardIcon}>
@@ -343,17 +595,47 @@ export default function MiPerfilScreen() {
 }
 
 const s = StyleSheet.create({
-  profileCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  profileCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14 },
+  avatarWrap: {
+    position: 'relative',
+    width: 58,
+    height: 58,
+  },
+  avatarPhoto: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 2,
+    borderColor: colors.primary[400],
+  },
+  avatarFallback: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: colors.primary[100],
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.primary[300],
   },
-  avatarText: { color: colors.primary[700], fontSize: 16, fontWeight: '700' },
-  profileName: { color: colors.ink[800], fontSize: 15, fontWeight: '700', marginBottom: 3 },
+  avatarBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.beige[200],
+    ...shadow.card,
+  },
+  avatarBadgeIcon: { fontSize: 11 },
+  avatarText: { color: colors.primary[700], fontSize: 18, fontWeight: '700' },
+  profileName: { color: colors.ink[800], fontSize: 16, fontWeight: '700', marginBottom: 2 },
+  changePhotoText: { color: colors.primary[500], fontSize: 11, fontWeight: '700', marginBottom: 2 },
 
   // Chat banner
   chatBanner: {
@@ -554,4 +836,142 @@ const s = StyleSheet.create({
   logout: { flexDirection: 'row', justifyContent: 'center', gap: 8, padding: 13 },
   logoutText: { color: colors.status.error, fontSize: 12, fontWeight: '700' },
   logoutArrow: { color: colors.status.error },
+
+  // Avatar Modal
+  avatarModalScroll: { padding: 18, paddingBottom: 40 },
+  modalHeaderSub: { color: colors.ink[700], fontSize: 11, marginTop: 2 },
+  avatarPreviewCard: {
+    backgroundColor: colors.white,
+    borderRadius: 18,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.beige[200],
+    marginBottom: 20,
+    ...shadow.card,
+  },
+  avatarPreviewBig: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    marginBottom: 10,
+    borderWidth: 3,
+    borderColor: colors.primary[400],
+    overflow: 'hidden',
+  },
+  avatarPreviewPhoto: { width: '100%', height: '100%' },
+  avatarPreviewFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.primary[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarPreviewInitials: { color: colors.primary[700], fontSize: 28, fontWeight: '700' },
+  avatarPreviewName: { color: colors.ink[800], fontSize: 16, fontWeight: '700' },
+  avatarPreviewState: { color: colors.ink[700], fontSize: 11, marginTop: 3 },
+
+  modalSectionTitle: { color: colors.beige[500], fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: 8 },
+  modalSectionDesc: { color: colors.ink[700], fontSize: 12, lineHeight: 17, marginBottom: 12 },
+
+  avatarActionsCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.beige[200],
+    overflow: 'hidden',
+    ...shadow.card,
+  },
+  avatarActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+  },
+  actionIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionIcon: { fontSize: 20 },
+  actionTitle: { color: colors.ink[800], fontSize: 13, fontWeight: '700' },
+  actionSub: { color: colors.ink[700], fontSize: 11, marginTop: 2 },
+  actionArrow: { color: colors.primary[500], fontSize: 16, fontWeight: '700' },
+  actionDivider: { height: 1, backgroundColor: colors.beige[100] },
+
+  // Presets Grid
+  presetsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  presetCategory: {
+    marginBottom: 20,
+  },
+  presetCategoryLabel: {
+    color: colors.primary[600],
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    marginBottom: 10,
+  },
+  presetCard: {
+    width: '31%',
+    backgroundColor: colors.white,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.beige[200],
+    padding: 10,
+    alignItems: 'center',
+    ...shadow.card,
+  },
+  presetCardSelected: {
+    borderColor: colors.primary[500],
+    backgroundColor: colors.primary[50],
+  },
+  presetPhotoWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    overflow: 'hidden',
+    position: 'relative',
+    marginBottom: 6,
+    borderWidth: 1.5,
+    borderColor: colors.beige[300],
+  },
+  presetPhotoWrapSelected: {
+    borderColor: colors.primary[500],
+    borderWidth: 2.5,
+  },
+  presetPhoto: { width: '100%', height: '100%' },
+  presetCheckBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: colors.primary[500],
+    borderRadius: 8,
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  presetCheckText: { color: colors.white, fontSize: 10, fontWeight: '800' },
+  presetLabel: { color: colors.ink[800], fontSize: 10, fontWeight: '600', textAlign: 'center' },
+  presetLabelSelected: { color: colors.primary[700], fontWeight: '700' },
+
+  pickingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  pickingText: { color: colors.primary[600], fontSize: 13, fontWeight: '600' },
 });

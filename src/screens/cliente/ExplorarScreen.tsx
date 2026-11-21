@@ -71,6 +71,28 @@ export default function ExplorarScreen({ onNavigateTab, onNavigateToAgendar }: P
         eyebrow="Yoss Beauty Salon"
         title={`Hola, ${clientProfile.name.split(' ')[0]} ✨`}
         subtitle="Tu semana de belleza y cuidado, en un solo lugar."
+        rightElement={
+          <TouchableOpacity
+            style={styles.headerAvatarBtn}
+            onPress={() => onNavigateTab?.('perfil')}
+            activeOpacity={0.8}
+          >
+            {clientProfile.avatarUri ? (
+              <Image
+                source={{ uri: clientProfile.avatarUri }}
+                style={styles.headerAvatarPhoto}
+                contentFit="cover"
+                transition={180}
+              />
+            ) : (
+              <View style={styles.headerAvatarFallback}>
+                <Text style={styles.headerAvatarInitials}>
+                  {clientProfile.name.trim().split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        }
       />
 
       {/* ── Tarjeta Resumen Semanal (Navega a Mis Citas) ── */}
@@ -292,4 +314,33 @@ const styles = StyleSheet.create({
   rewardsBannerTitle: { color: colors.white, fontSize: 13, fontWeight: '700' },
   rewardsBannerSub: { color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 1 },
   rewardsBannerArrow: { color: colors.white, fontSize: 18, fontWeight: '700' },
+
+  headerAvatarBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    ...shadow.card,
+  },
+  headerAvatarPhoto: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: colors.primary[400],
+  },
+  headerAvatarFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primary[100],
+    borderWidth: 1.5,
+    borderColor: colors.primary[300],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerAvatarInitials: {
+    color: colors.primary[700],
+    fontSize: 15,
+    fontWeight: '700',
+  },
 });

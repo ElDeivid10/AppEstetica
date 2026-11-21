@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { SalonProvider, useSalon } from '@/context/SalonContext';
 import LoginScreen from '@/screens/auth/LoginScreen';
 import RegisterScreen from '@/screens/auth/RegisterScreen';
+import OnboardingGuide from '@/components/OnboardingGuide';
 
 // ── Pantallas Cliente ──────────────────────────────────────────────────────────
 import ExplorarScreen      from '@/screens/cliente/ExplorarScreen';
@@ -262,11 +263,23 @@ function BlockedScreen() {
 //  ROUTER RAÍZ
 // ─────────────────────────────────────────────────────────────────────────────
 function RootRouter() {
-  const { userRole, isBlocked } = useAuth();
+  const { userRole, isBlocked, showOnboarding, dismissOnboarding } = useAuth();
   if (userRole === null)    return <AuthNavigator />;
   if (isBlocked)            return <BlockedScreen />;
-  if (userRole === 'admin') return <AdminNavigator />;
-  return <ClienteNavigator />;
+
+  const content = userRole === 'admin' ? <AdminNavigator /> : <ClienteNavigator />;
+
+  return (
+    <>
+      {content}
+      {/* Guía de primer uso — se muestra sobre cualquier pantalla al iniciar sesión */}
+      <OnboardingGuide
+        visible={showOnboarding}
+        role={userRole}
+        onFinish={dismissOnboarding}
+      />
+    </>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

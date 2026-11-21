@@ -1,22 +1,41 @@
 {
   "expo": {
-    "name": "AppEstetica",
-    "slug": "AppEstetica",
+    "name": "Yoss Beauty Salon",
+    "slug": "yoss-beauty-salon",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "appestetica",
-    "userInterfaceStyle": "automatic",
+    "scheme": "yossbeautysalon",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAF6EF"
+    },
     "ios": {
-      "icon": "./assets/expo.icon"
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yoss.beautysalon",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Yoss Beauty Salon requiere acceso a la cámara para tomar tu foto de perfil.",
+        "NSPhotoLibraryUsageDescription": "Yoss Beauty Salon requiere acceso a tus fotos para seleccionar tu foto de perfil."
+      }
     },
     "android": {
+      "package": "com.yoss.beautysalon",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FAF6EF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.INTERNET"
+      ],
+      "allowBackup": false,
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -28,12 +47,19 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#FAF6EF",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 120
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "La aplicación requiere acceso a tu galería para elegir tu foto de perfil.",
+          "cameraPermission": "La aplicación requiere acceso a tu cámara para tomar tu foto de perfil."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

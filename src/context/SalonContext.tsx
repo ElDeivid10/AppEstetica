@@ -56,9 +56,175 @@ export interface ChatMessage {
   type?: 'welcome' | 'reminder' | 'confirmation' | 'reward' | 'chat';
   readByClient: boolean;
   readByAdmin: boolean;
+  mapUrl?: string;
+  mapAddress?: string;
+  mapTitle?: string;
+  paymentUrl?: string;
+  paymentTitle?: string;
 }
 
 // ── Perfil del Cliente ────────────────────────────────────────────────────────
+export interface AvatarPreset {
+  id: string;
+  name: string;
+  category: 'salon' | 'pinturas' | 'animales';
+  categoryLabel: string;
+  uri: string;
+  color: string;
+}
+
+export const AVATAR_PRESETS: AvatarPreset[] = [
+  // ── Estilos de Salón & Peinados ──────────────────────────────
+  {
+    id: 'preset-s1',
+    name: 'Corte Chic',
+    category: 'salon',
+    categoryLabel: 'Salón',
+    uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
+    color: '#8A9A65',
+  },
+  {
+    id: 'preset-s2',
+    name: 'Rizos Glam',
+    category: 'salon',
+    categoryLabel: 'Salón',
+    uri: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=300&q=80',
+    color: '#B8976C',
+  },
+  {
+    id: 'preset-s3',
+    name: 'Rubio Balayage',
+    category: 'salon',
+    categoryLabel: 'Salón',
+    uri: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80',
+    color: '#4B5548',
+  },
+  {
+    id: 'preset-s4',
+    name: 'Ondas Castañas',
+    category: 'salon',
+    categoryLabel: 'Salón',
+    uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80',
+    color: '#654321',
+  },
+  {
+    id: 'preset-s5',
+    name: 'Moño Elegante',
+    category: 'salon',
+    categoryLabel: 'Salón',
+    uri: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80',
+    color: '#2C3E2D',
+  },
+  {
+    id: 'preset-s6',
+    name: 'Look Natural',
+    category: 'salon',
+    categoryLabel: 'Salón',
+    uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80',
+    color: '#A08060',
+  },
+
+  // ── Pinturas & Bellas Artes Clásicas ────────────────────────
+  {
+    id: 'preset-p1',
+    name: 'Dama Clásica',
+    category: 'pinturas',
+    categoryLabel: 'Pinturas',
+    uri: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=300&q=80',
+    color: '#9E7D5D',
+  },
+  {
+    id: 'preset-p2',
+    name: 'Musa con Perla',
+    category: 'pinturas',
+    categoryLabel: 'Pinturas',
+    uri: 'https://images.unsplash.com/photo-1582561424760-0321d75e81fa?auto=format&fit=crop&w=300&q=80',
+    color: '#3A4E5C',
+  },
+  {
+    id: 'preset-p3',
+    name: 'Retrato Barroco',
+    category: 'pinturas',
+    categoryLabel: 'Pinturas',
+    uri: 'https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=300&q=80',
+    color: '#63442C',
+  },
+  {
+    id: 'preset-p4',
+    name: 'Acuarela Botánica',
+    category: 'pinturas',
+    categoryLabel: 'Pinturas',
+    uri: 'https://images.unsplash.com/photo-1579762715118-a6f1d4b934f1?auto=format&fit=crop&w=300&q=80',
+    color: '#5C7457',
+  },
+  {
+    id: 'preset-p5',
+    name: 'Dama del Jardín',
+    category: 'pinturas',
+    categoryLabel: 'Pinturas',
+    uri: 'https://images.unsplash.com/photo-1579783928621-7a13d66a62d1?auto=format&fit=crop&w=300&q=80',
+    color: '#A45D48',
+  },
+  {
+    id: 'preset-p6',
+    name: 'Lienzo Renacentista',
+    category: 'pinturas',
+    categoryLabel: 'Pinturas',
+    uri: 'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?auto=format&fit=crop&w=300&q=80',
+    color: '#82653E',
+  },
+
+  // ── Animales & Naturaleza (Dibujo Realista) ──────────────────
+  {
+    id: 'preset-a1',
+    name: 'Gatita Ilustrada',
+    category: 'animales',
+    categoryLabel: 'Animales',
+    uri: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=300&q=80',
+    color: '#8A7968',
+  },
+  {
+    id: 'preset-a2',
+    name: 'Cierva Mística',
+    category: 'animales',
+    categoryLabel: 'Animales',
+    uri: 'https://images.unsplash.com/photo-1484406566174-9da000fda645?auto=format&fit=crop&w=300&q=80',
+    color: '#5E6649',
+  },
+  {
+    id: 'preset-a3',
+    name: 'Zorro Noble',
+    category: 'animales',
+    categoryLabel: 'Animales',
+    uri: 'https://images.unsplash.com/photo-1516934024742-b461fba47600?auto=format&fit=crop&w=300&q=80',
+    color: '#9C582B',
+  },
+  {
+    id: 'preset-a4',
+    name: 'Cisne Sereno',
+    category: 'animales',
+    categoryLabel: 'Animales',
+    uri: 'https://images.unsplash.com/photo-1557008075-7f2c5efa4cfd?auto=format&fit=crop&w=300&q=80',
+    color: '#657A88',
+  },
+  {
+    id: 'preset-a5',
+    name: 'Colibrí Esmeralda',
+    category: 'animales',
+    categoryLabel: 'Animales',
+    uri: 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?auto=format&fit=crop&w=300&q=80',
+    color: '#346B52',
+  },
+  {
+    id: 'preset-a6',
+    name: 'Mariposa Monarca',
+    category: 'animales',
+    categoryLabel: 'Animales',
+    uri: 'https://images.unsplash.com/photo-1559253664-ca249d4608c6?auto=format&fit=crop&w=300&q=80',
+    color: '#B6662D',
+  },
+];
+
 export interface ClientProfile {
   id: string;
   name: string;
@@ -70,6 +236,8 @@ export interface ClientProfile {
   level: string;
   nextLevel: string;
   nextLevelAt: number;
+  avatarUri?: string;
+  avatarPresetId?: string;
 }
 
 // ── Contexto Interface ────────────────────────────────────────────────────────
@@ -103,6 +271,8 @@ interface SalonContextType {
   // Perfil
   clientProfile: ClientProfile;
   updateClientProfile: (updates: Partial<ClientProfile>) => void;
+  updateAvatar: (uri?: string, presetId?: string) => void;
+  removeAvatar: () => void;
 }
 
 const SalonContext = createContext<SalonContextType | null>(null);
@@ -253,7 +423,7 @@ const INITIAL_MESSAGES: ChatMessage[] = [
     clientId: 'cli-ana',
     sender: 'bot',
     senderName: 'Asistente Yoss',
-    text: '¡Hola Ana! ✨ Bienvenida a tu espacio personal en Yoss Beauty Salon. Aquí podrás consultar tus citas, resolver dudas y recibir recordatorios de tus tratamientos.',
+    text: '¡Hola Ana! ✨ Bienvenida a tu espacio personal en Yoss Beauty Salon. Aquí puedes consultar tus citas, horarios, ubicación y resolver dudas de tus tratamientos.',
     timestamp: '10:00 AM',
     type: 'welcome',
     readByClient: true,
@@ -262,20 +432,34 @@ const INITIAL_MESSAGES: ChatMessage[] = [
   {
     id: 'msg-2',
     clientId: 'cli-ana',
+    sender: 'bot',
+    senderName: 'Ubicación Yoss Beauty Salon',
+    text: '📍 Nuestra dirección:\nCueramo, Gomez 60154, Uruapan, Mich.\n\n¡Toca el mapa interactivo para ver la ruta exacta en Google Maps!',
+    timestamp: '10:01 AM',
+    type: 'chat',
+    readByClient: true,
+    readByAdmin: true,
+    mapUrl: 'https://maps.app.goo.gl/gjva8goQK7GQSpqQ6',
+    mapAddress: 'Cueramo, Gomez 60154, Uruapan, Mich.',
+    mapTitle: 'Yoss Beauty Salon · Uruapan, Mich.',
+  },
+  {
+    id: 'msg-3',
+    clientId: 'cli-ana',
     sender: 'yoss',
     senderName: 'Yoss (Dueña)',
-    text: 'Hola Ana, un gusto tenerte por aquí. Si tienes alguna duda sobre tu próximo retoque o deseas agregar un tratamiento reconstructor, escríbeme directamente.',
+    text: '¡Hola Ana! Un gusto atenderte. Si tienes alguna duda sobre tu cita del Miércoles 22, coloración o deseas pagar tu anticipo con Mercado Pago, escríbeme por aquí 💕',
     timestamp: '10:05 AM',
     type: 'chat',
     readByClient: true,
     readByAdmin: true,
   },
   {
-    id: 'msg-3',
+    id: 'msg-4',
     clientId: 'cli-ana',
     sender: 'bot',
     senderName: 'Recordatorio',
-    text: '🔔 Recordatorio: Tu cita de "Retoque de raíz" está agendada para el Miércoles 22 a las 11:00 AM. Te recomendamos llegar 5 minutos antes.',
+    text: '🔔 Recordatorio: Tu cita de "Retoque de raíz" está agendada para el Miércoles 22 a las 11:00 AM. ¡Te esperamos!',
     timestamp: 'Ayer 06:00 PM',
     type: 'reminder',
     readByClient: false,
@@ -435,13 +619,65 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     // Lógica de auto-respuesta bot / FAQ inmediata para el cliente
     const lower = text.toLowerCase();
     let botReply = '';
+    let mapUrl: string | undefined = undefined;
+    let mapAddress: string | undefined = undefined;
+    let mapTitle: string | undefined = undefined;
+    let paymentUrl: string | undefined = undefined;
+    let paymentTitle: string | undefined = undefined;
 
-    if (lower.includes('horario') || lower.includes('hora') || lower.includes('abre') || lower.includes('cierra')) {
-      botReply = '🕒 Nuestro horario de atención es de Lunes a Sábado de 9:00 AM a 7:00 PM. Los domingos descansamos.';
-    } else if (lower.includes('ubicacion') || lower.includes('ubicación') || lower.includes('donde') || lower.includes('dirección') || lower.includes('direccion')) {
-      botReply = '📍 Estamos ubicados en Av. Principal #120, Col. Centro. ¡Contamos con estacionamiento para clientas!';
-    } else if (lower.includes('anticipo') || lower.includes('deposito') || lower.includes('pago')) {
-      botReply = '💳 Los servicios largos como Colorimetría y Alaciados requieren un anticipo para asegurar tu bloque de tiempo. Puedes acordarlo directamente con Yoss al agendar.';
+    if (
+      lower.includes('horario') ||
+      lower.includes('hora') ||
+      lower.includes('abre') ||
+      lower.includes('cierra') ||
+      lower.includes('dias') ||
+      lower.includes('días')
+    ) {
+      botReply =
+        '🕒 Horario de atención de Yoss Beauty Salon:\n\n' +
+        '• Lunes a Viernes:\n' +
+        '  11:00 am – 2:00 pm  y  4:00 pm – 7:00 pm\n\n' +
+        '• Sábados:\n' +
+        '  11:00 am – 6:00 pm (horario corrido)\n\n' +
+        '• Domingos:\n' +
+        '  Cerrado (descanso familiar)';
+    } else if (
+      lower.includes('ubicacion') ||
+      lower.includes('ubicación') ||
+      lower.includes('donde') ||
+      lower.includes('dónde') ||
+      lower.includes('dirección') ||
+      lower.includes('direccion') ||
+      lower.includes('llegar') ||
+      lower.includes('mapa')
+    ) {
+      botReply =
+        '📍 Nuestra ubicación:\n' +
+        'Cueramo, Gomez 60154, Uruapan, Mich.\n\n' +
+        '¡Fácil acceso y estacionamiento para clientas! Toca la tarjeta de mapa interactivo a continuación para abrir la ruta en Google Maps:';
+      mapUrl = 'https://maps.app.goo.gl/gjva8goQK7GQSpqQ6';
+      mapAddress = 'Cueramo, Gomez 60154, Uruapan, Mich.';
+      mapTitle = 'Yoss Beauty Salon · Uruapan';
+    } else if (
+      lower.includes('anticipo') ||
+      lower.includes('deposito') ||
+      lower.includes('depósito') ||
+      lower.includes('mercado pago') ||
+      lower.includes('mercadopago') ||
+      lower.includes('pago') ||
+      lower.includes('transferencia')
+    ) {
+      botReply =
+        '💳 Anticipos con Mercado Pago:\n\n' +
+        'Los servicios largos (como Colorimetría, Balayage, Mechas y Alaciados Progresivos) requieren un anticipo para asegurar tu cita y preparar tus fórmulas personalizadas.\n\n' +
+        '💙 ¡Ahora puedes pagarlo fácil y rápido mediante Mercado Pago!\nMétodos aceptados:\n' +
+        '• Tarjetas de crédito o débito\n' +
+        '• Transferencia SPEI (acreditación inmediata)\n' +
+        '• Saldo en cuenta Mercado Pago\n' +
+        '• Pago en efectivo en OXXO\n\n' +
+        'Toca el botón a continuación para realizar tu pago de anticipo de forma 100% segura.';
+      paymentUrl = 'https://www.mercadopago.com.mx';
+      paymentTitle = 'Pagar anticipo con Mercado Pago';
     } else if (lower.includes('recompensa') || lower.includes('punto') || lower.includes('club')) {
       botReply = `✦ Actualmente estás en Nivel ${clientProfile.level} con ${clientProfile.totalVisits} visitas y $${clientProfile.totalSpent.toLocaleString()} acumulados. Puedes ver tus beneficios en la pestaña central "Club".`;
     } else if (lower.includes('cancela') || lower.includes('cancelar')) {
@@ -463,6 +699,11 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
         type: 'chat',
         readByClient: false,
         readByAdmin: true,
+        mapUrl,
+        mapAddress,
+        mapTitle,
+        paymentUrl,
+        paymentTitle,
       };
       setMessages(prev => [...prev, replyMsg]);
     }, 600);
@@ -509,6 +750,23 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     setClientProfile(prev => ({ ...prev, ...updates }));
   };
 
+  const updateAvatar = (uri?: string, presetId?: string) => {
+    setClientProfile(prev => ({
+      ...prev,
+      avatarUri: uri,
+      avatarPresetId: presetId,
+    }));
+  };
+
+  const removeAvatar = () => {
+    setClientProfile(prev => {
+      const copy = { ...prev };
+      delete copy.avatarUri;
+      delete copy.avatarPresetId;
+      return copy;
+    });
+  };
+
   return (
     <SalonContext.Provider
       value={{
@@ -532,6 +790,8 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
         markAdminMessagesAsRead,
         clientProfile,
         updateClientProfile,
+        updateAvatar,
+        removeAvatar,
       }}
     >
       {children}
