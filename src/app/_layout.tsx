@@ -5,8 +5,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
-  SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView, initialWindowMetrics } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { SalonProvider, useSalon } from '@/context/SalonContext';
@@ -111,7 +113,8 @@ function ClienteNavigator() {
   };
 
   return (
-    <SafeAreaView style={s.safeArea}>
+    <SafeAreaView style={s.safeArea} edges={['top', 'bottom']}>
+      <StatusBar style="dark" />
       {showAgendar ? (
         <AgendarCitaScreen
           onNavigateBack={handleAgendarBack}
@@ -202,7 +205,8 @@ function AdminNavigator() {
   };
 
   return (
-    <SafeAreaView style={[s.safeArea, s.safeAreaAdmin]}>
+    <SafeAreaView style={[s.safeArea, s.safeAreaAdmin]} edges={['top', 'bottom']}>
+      <StatusBar style="dark" />
       <View style={s.adminBanner}>
         <Text style={s.adminBannerText}>MODO ADMINISTRADOR — YOSS</Text>
       </View>
@@ -245,7 +249,8 @@ function AdminNavigator() {
 function BlockedScreen() {
   const { logout } = useAuth();
   return (
-    <SafeAreaView style={s.blockedContainer}>
+    <SafeAreaView style={s.blockedContainer} edges={['top', 'bottom']}>
+      <StatusBar style="dark" />
       <View style={s.blockedIcon}><View style={s.blockedBar} /></View>
       <Text style={s.blockedTitle}>Cuenta Suspendida</Text>
       <Text style={s.blockedBody}>
@@ -263,7 +268,16 @@ function BlockedScreen() {
 //  ROUTER RAÍZ
 // ─────────────────────────────────────────────────────────────────────────────
 function RootRouter() {
-  const { userRole, isBlocked, showOnboarding, dismissOnboarding } = useAuth();
+  const { userRole, isLoadingAuth, isBlocked, showOnboarding, dismissOnboarding } = useAuth();
+  if (isLoadingAuth) {
+    return (
+      <SafeAreaView style={s.loadingContainer} edges={['top', 'bottom']}>
+        <StatusBar style="dark" />
+        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <Text style={s.loadingText}>Conectando con Yoss Beauty Salon...</Text>
+      </SafeAreaView>
+    );
+  }
   if (userRole === null)    return <AuthNavigator />;
   if (isBlocked)            return <BlockedScreen />;
 
@@ -287,11 +301,13 @@ function RootRouter() {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <SalonProvider>
-        <RootRouter />
-      </SalonProvider>
-    </AuthProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <AuthProvider>
+        <SalonProvider>
+          <RootRouter />
+        </SalonProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 
@@ -396,7 +412,9 @@ const s = StyleSheet.create({
   centerTabLabel: { fontSize: 9, color: colors.beige[400], fontWeight: '600' },
   centerTabLabelActive: { color: colors.primary[500], fontWeight: '700' },
 
-  // Cuenta bloqueada
+  // Cuenta bloqueada y carga
+  loadingContainer: { flex: 1, backgroundColor: colors.beige[50], alignItems: 'center', justifyContent: 'center', gap: 14 },
+  loadingText: { fontSize: 13, color: colors.ink[700], fontWeight: '600' },
   blockedContainer: { flex: 1, backgroundColor: colors.beige[50], alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   blockedIcon: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderColor: colors.status.error, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.lg },
   blockedBar: { width: 24, height: 3, backgroundColor: colors.status.error, borderRadius: 2 },

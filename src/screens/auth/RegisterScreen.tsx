@@ -12,6 +12,7 @@ import {
   Animated,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   useFonts,
   CormorantGaramond_500Medium,
@@ -23,6 +24,7 @@ import {
   DMSans_600SemiBold,
 } from '@expo-google-fonts/dm-sans';
 
+import { useAuth } from '@/context/AuthContext';
 import { theme } from '@/constants/YossTheme';
 
 const { colors, fonts, borderRadius, shadow, spacing } = theme;
@@ -84,9 +86,11 @@ interface Props {
   onNavigateToLogin: () => void;
 }
 
-type Field = 'name' | 'lastName' | 'phone' | 'email' | 'password' | 'confirm';
+type Field = 'name' | 'lastName' | 'phone' | 'email' | 'password' | 'confirm' | 'allergies';
 
 export default function RegisterScreen({ onNavigateToLogin }: Props) {
+  const { signUp } = useAuth();
+  const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     CormorantGaramond_500Medium,
     CormorantGaramond_300Light,
@@ -115,6 +119,8 @@ export default function RegisterScreen({ onNavigateToLogin }: Props) {
   const [showConfirm, setShowConfirm]     = useState(false);
   const [focused, setFocused]             = useState<Field | null>(null);
   const [errors, setErrors]               = useState<Partial<Record<Field, string>>>({});
+  const [submitError, setSubmitError]     = useState('');
+  const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [isLoading, setIsLoading]         = useState(false);
   const [success, setSuccess]             = useState(false);
 
@@ -146,8 +152,10 @@ export default function RegisterScreen({ onNavigateToLogin }: Props) {
     const e: typeof errors = {};
     if (!form.name.trim())     e.name     = 'El nombre es requerido';
     if (!form.lastName.trim()) e.lastName = 'El apellido es requerido';
-    if (!form.phone.trim() || form.phone.length < 10)
+    if (!form.phone.trim() || form.phone.replace(/[^\d]/g, '').length < 10)
                                e.phone    = 'Ingresa un teléfono válido (10 dígitos)';
+    if (form.email.trim() && !form.email.includes('@'))
+                               e.email    = 'Ingresa un correo electrónico válido';
     if (!form.password || form.password.length < 6)
                                e.password = 'Mínimo 6 caracteres';
     if (form.password !== form.confirm)
@@ -158,10 +166,26 @@ export default function RegisterScreen({ onNavigateToLogin }: Props) {
 
   const handleRegister = async () => {
     if (!validate()) { triggerShake(); return; }
+    setSubmitError('');
     setIsLoading(true);
-    // Simulación de registro (sin base de datos aún)
-    await new Promise((r) => setTimeout(r, 1000));
+    const res = await signUp({
+      name: form.name,
+      lastName: form.lastName,
+      phone: form.phone,
+      email: form.email,
+      password: form.password,
+      hairType: form.hairType,
+      allergies: form.allergies,
+    });
     setIsLoading(false);
+
+    if (res.error) {
+      setSubmitError(res.error);
+      triggerShake();
+      return;
+    }
+
+    setNeedsEmailConfirm(!!res.needsEmailConfirmation);
     setSuccess(true);
   };
 
@@ -176,8 +200,9 @@ export default function RegisterScreen({ onNavigateToLogin }: Props) {
           </View>
           <Text style={[s.successTitle, { fontFamily: titleFont }]}>¡Registro exitoso!</Text>
           <Text style={[s.successBody, { fontFamily: bodyFont }]}>
-            Tu cuenta ha sido creada. En cuanto vinculemos la base de datos podrás
-            iniciar sesión con tu teléfono.
+            {needsEmailConfirm
+              ? 'Tu cuenta fue creada en Supabase. Confirma tu correo (o desactiva "Confirm email" en Supabase Auth) e inicia sesión.'
+              : 'Tu cuenta ha sido creada y guardada en la base de datos. Ya puedes iniciar sesión con tu teléfono o correo.'}
           </Text>
           <TouchableOpacity
             style={s.btn}
@@ -206,7 +231,13 @@ export default function RegisterScreen({ onNavigateToLogin }: Props) {
         style={s.kbView}
       >
         <ScrollView
-          contentContainerStyle={s.scroll}
+          contentContainerStyle={[
+            s.scroll,
+            {
+              paddingTop: Math.max(insets.top + 16, Platform.OS === 'ios' ? 58 : 46),
+              paddingBottom: Math.max(insets.bottom + 20, spacing.xl),
+            },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -304,7 +335,7 @@ export default function RegisterScreen({ onNavigateToLogin }: Props) {
               <FieldLabel text="Correo electrónico (opcional)" fontFamily={semiBoldFont} />
               <InputRow
                 focused={focused === 'email'}
-                error={false}
+                error={!!errors.email}
                 onFocus={() => setFocused('email')}
                 onBlur={() => setFocused(null)}
               >
@@ -321,6 +352,7 @@ export default function RegisterScreen({ onNavigateToLogin }: Props) {
                   onSubmitEditing={() => refs.password.current?.focus()}
                 />
               </InputRow>
+              {errors.email && <ErrorMsg text={errors.email} fontFamily={bodyFont} />}
             </View>
 
             <View style={s.divider} />
@@ -405,9 +437,9 @@ export default function RegisterScreen({ onNavigateToLogin }: Props) {
             <View style={[s.field, { marginTop: spacing.md }]}>
               <FieldLabel text="Alergias o sensibilidades (opcional)" fontFamily={semiBoldFont} />
               <InputRow
-                focused={focused === ('allergies' as Field)}
+                focused={focused === 'allergies'}
                 error={false}
-                onFocus={() => setFocused('confirm')}
+                onFocus={() => setFocused('allergies')}
                 onBlur={() => setFocused(null)}
                 multiline
               >
@@ -433,6 +465,13 @@ export default function RegisterScreen({ onNavigateToLogin }: Props) {
                 tus citas en Yoss Beauty Salon.
               </Text>
             </View>
+
+            {/* ── Error de servidor ── */}
+            {submitError !== '' && (
+              <View style={s.submitErrorBox}>
+                <Text style={[s.submitErrorText, { fontFamily: mediumFont }]}>{submitError}</Text>
+              </View>
+            )}
 
             {/* ── CTA ── */}
             <TouchableOpacity
@@ -677,6 +716,19 @@ const s = StyleSheet.create({
   },
 
   // ── Botón ─────────────────────────────────────
+  submitErrorBox: {
+    backgroundColor: '#FFF5F5',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: borderRadius.sm,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  submitErrorText: {
+    fontSize: 12,
+    color: colors.status.error,
+    lineHeight: 17,
+  },
   btn: {
     backgroundColor: colors.primary[500],
     borderRadius: borderRadius.button,

@@ -7,7 +7,7 @@
  * Se activa desde el contexto de autenticación (flag `hasSeenOnboarding`).
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -152,6 +152,13 @@ export default function OnboardingGuide({ visible, role, onFinish }: Props) {
   const steps = role === 'admin' ? ADMIN_ONBOARDING_STEPS : CLIENT_ONBOARDING_STEPS;
   const [currentStep, setCurrentStep] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setCurrentStep(0);
+      fadeAnim.setValue(1);
+    }
+  }, [visible, role, fadeAnim]);
 
   const goToStep = (nextIndex: number) => {
     Animated.timing(fadeAnim, {

@@ -20,109 +20,16 @@ interface Props {
   onNavigateToAgendar?: (params?: { fecha?: string; servicioId?: string; isRecompensa?: boolean; recompensaNombre?: string }) => void;
 }
 
-// ── Datos de servicios — espejo del catálogo web ───────────────────────────────
-const SERVICES = [
-  {
-    id: 'srv-001',
-    icon: '✂',
-    name: 'Cortes de Cabello',
-    duration: '20–45 MIN',
-    desc: 'Cortes modernos y clásicos adaptados a cada persona, realizados con técnica profesional.',
-    tags: ['Dama', 'Caballero', 'Niños', 'Niñas'],
-    requiresDeposit: false,
-  },
-  {
-    id: 'srv-002',
-    icon: '◯',
-    name: 'Perfilado de Barba',
-    duration: '15–20 MIN',
-    desc: 'Definición y perfilado de barba para un acabado limpio y estilizado.',
-    tags: ['Caballero'],
-    requiresDeposit: false,
-  },
-  {
-    id: 'srv-003',
-    icon: '✦',
-    name: 'Colorimetría',
-    duration: '2–8 HORAS',
-    desc: 'Transforma tu cabello con colores personalizados y técnicas de última generación.',
-    tags: ['Mechas', 'Tintes', 'Balayage', 'Baby Lights', 'Rayos'],
-    requiresDeposit: true,
-  },
-  {
-    id: 'srv-004',
-    icon: '★',
-    name: 'Maquillaje y Peinado',
-    duration: '45–90 MIN',
-    desc: 'Realza tu belleza natural con maquillaje profesional y peinados para cualquier ocasión.',
-    tags: ['Social', 'Novia', 'Graduación'],
-    requiresDeposit: false,
-  },
-  {
-    id: 'srv-005',
-    icon: '✿',
-    name: 'Depilaciones',
-    duration: '15–45 MIN',
-    desc: 'Técnicas de depilación suaves y eficaces para una piel perfectamente suave.',
-    tags: ['Rostro completo', 'Cejas', 'Bigote', 'Axilas', 'Piernas'],
-    requiresDeposit: false,
-  },
-  {
-    id: 'srv-006',
-    icon: '♡',
-    name: 'Alaciados Progresivos',
-    duration: '3–5 HORAS',
-    desc: 'Tratamiento para alisar y suavizar el cabello de forma duradera con productos de calidad.',
-    tags: ['Keratina', 'Botox Capilar', 'Nanoplastia'],
-    requiresDeposit: true,
-  },
-];
-
-// ── Datos de productos de ejemplo ─────────────────────────────────────────────
-const PRODUCTS = [
-  {
-    id: 'p1',
-    brand: "L'ORÉAL PROFESSIONNEL",
-    name: 'Acondicionador Vitamino Color',
-    detail: 'Protección para cabello teñido · 200 ml',
-    price: '$520',
-    tint: '#F5E8DD',
-    image: 'https://www.sephora.com/productimages/sku/s2717411-main-zoom.jpg',
-  },
-  {
-    id: 'p2',
-    brand: 'WELLA PROFESSIONALS',
-    name: 'Color Fresh Mask',
-    detail: 'Mascarilla con color temporal · 150 ml',
-    price: '$690',
-    tint: '#E9E5F1',
-    image: 'https://wella.bynder.com/m/cdb6a5785d08b9f5/original/Wella_Professionals_Color_Fresh_Mask_Copper_Glow_150ml_PI_1.png',
-  },
-  {
-    id: 'p3',
-    brand: 'OLAPLEX',
-    name: 'No.5 Bond Maintenance',
-    detail: 'Acondicionador reparador · 250 ml',
-    price: '$780',
-    tint: '#F0EEDC',
-    image: 'https://olaplex.com/cdn/shop/articles/Large_JPG-TEXTURE_N5_WHITE_BG_W_PRODUCT_3000x3000_0faafb22-1f16-42ff-b774-7361fdaa005f.jpg?v=1706268308&width=1200',
-  },
-  {
-    id: 'p4',
-    brand: 'KERASTASE',
-    name: 'Chroma Absolu Fondant',
-    detail: 'Acondicionador para cabello teñido · 200 ml',
-    price: '$1,150',
-    tint: '#F1E6EC',
-    image: 'https://www.kerastase.com.br/dw/image/v2/AAFM_PRD/on/demandware.static/-/Sites-kerastase-master-catalog/pt_BR/dw831df1bc/images/KRBR00119/condicionador-kerastase-%20chroma-absolu-fondant-cica-chroma.jpg',
-  },
-];
+const PRODUCT_TINTS = ['#F5E8DD', '#E9E5F1', '#F0EEDC', '#F1E6EC'];
 
 type ActiveSection = 'servicios' | 'productos';
 
 export default function ServiciosScreen({ onNavigateToAgendar }: Props) {
   const [activeSection, setActiveSection] = useState<ActiveSection>('servicios');
-  const { isFavService, toggleFavService, isFavProduct, toggleFavProduct } = useSalon();
+  const { servicesCatalog, productsCatalog, isFavService, toggleFavService, isFavProduct, toggleFavProduct } = useSalon();
+
+  const SERVICES = servicesCatalog.filter(s => s.active);
+  const PRODUCTS = productsCatalog.filter(pItem => pItem.active);
 
   return (
     <ScrollView style={p.page} contentContainerStyle={p.scroll} showsVerticalScrollIndicator={false}>
@@ -167,9 +74,9 @@ export default function ServiciosScreen({ onNavigateToAgendar }: Props) {
                     <Text style={s.serviceIcon}>{service.icon}</Text>
                   </View>
                   <View style={s.serviceNameRow}>
-                    <Text style={s.serviceName}>{service.name}</Text>
+                    <Text style={s.serviceName}>{service.nombre}</Text>
                     <View style={s.durationBadge}>
-                      <Text style={s.durationText}>{service.duration}</Text>
+                      <Text style={s.durationText}>{service.duracion}</Text>
                     </View>
                   </View>
                   <TouchableOpacity
@@ -184,7 +91,7 @@ export default function ServiciosScreen({ onNavigateToAgendar }: Props) {
                 </View>
 
                 {/* Descripción */}
-                <Text style={s.serviceDesc}>{service.desc}</Text>
+                <Text style={s.serviceDesc}>{service.descripcion}</Text>
 
                 {/* Tags */}
                 {service.tags.length > 0 && (
@@ -225,18 +132,25 @@ export default function ServiciosScreen({ onNavigateToAgendar }: Props) {
       {/* ── Vista de PRODUCTOS ── */}
       {activeSection === 'productos' && (
         <View style={s.productGrid}>
-          {PRODUCTS.map(product => {
+          {PRODUCTS.map((product, idx) => {
             const isFav = isFavProduct(product.id);
+            const tint = PRODUCT_TINTS[idx % PRODUCT_TINTS.length];
             return (
               <View key={product.id} style={s.productCard}>
-                <View style={[s.productArt, { backgroundColor: product.tint }]}>
-                  <Image
-                    source={{ uri: product.image }}
-                    style={s.productPhoto}
-                    contentFit="contain"
-                    transition={180}
-                    accessibilityLabel={`Imagen de ${product.name}`}
-                  />
+                <View style={[s.productArt, { backgroundColor: tint }]}>
+                  {product.image ? (
+                    <Image
+                      source={{ uri: product.image }}
+                      style={s.productPhoto}
+                      contentFit="contain"
+                      transition={180}
+                      accessibilityLabel={`Imagen de ${product.name}`}
+                    />
+                  ) : (
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 32 }}>🧴</Text>
+                    </View>
+                  )}
                   <TouchableOpacity
                     onPress={() => toggleFavProduct(product.id)}
                     style={s.productFavBtn}
@@ -247,14 +161,14 @@ export default function ServiciosScreen({ onNavigateToAgendar }: Props) {
                     </Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={s.productBrand}>{product.brand}</Text>
+                <Text style={s.productBrand}>{product.brand.toUpperCase()}</Text>
                 <Text style={s.productName} numberOfLines={2}>
                   {product.name}
                 </Text>
                 <Text style={s.productDetail} numberOfLines={1}>
-                  {product.detail}
+                  {product.stock ? 'En stock en salón' : 'Agotado'}
                 </Text>
-                <Text style={s.productPrice}>{product.price}</Text>
+                <Text style={s.productPrice}>{product.priceFormatted}</Text>
               </View>
             );
           })}

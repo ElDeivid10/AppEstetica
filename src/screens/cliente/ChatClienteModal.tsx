@@ -23,6 +23,7 @@ import {
   Platform,
   Linking,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSalon, ChatMessage } from '@/context/SalonContext';
 import { theme } from '@/constants/YossTheme';
 
@@ -56,11 +57,11 @@ export default function ChatClienteModal({ visible, onClose }: Props) {
     }
   }, [visible, messages.length]);
 
-  const handleSend = (textToSend?: string) => {
+  const handleSend = async (textToSend?: string) => {
     const text = textToSend || inputText;
     if (!text.trim()) return;
-    sendMessageAsClient(text);
-    setInputText('');
+    if (!textToSend) setInputText('');
+    await sendMessageAsClient(text);
     setTimeout(() => {
       scrollRef.current?.scrollToEnd({ animated: true });
     }, 150);
@@ -68,9 +69,10 @@ export default function ChatClienteModal({ visible, onClose }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={s.root}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
       >
         {/* ── Encabezado ── */}
@@ -231,6 +233,7 @@ export default function ChatClienteModal({ visible, onClose }: Props) {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   );
 }

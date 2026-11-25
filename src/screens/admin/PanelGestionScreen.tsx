@@ -1,132 +1,239 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ScrollView, Text, View, StyleSheet, TouchableOpacity, TextInput, Switch } from 'react-native';
 import { Image } from 'expo-image';
 import { PageHeader, StatusPill, pageStyles as p } from '@/components/SalonUI';
 import { useAuth } from '@/context/AuthContext';
+import { useSalon, ServiceCatalogItem, ProductCatalogItem } from '@/context/SalonContext';
 import { theme } from '@/constants/YossTheme';
 
-const { colors } = theme;
+const { colors, borderRadius } = theme;
 
-type PanelTab = 'Anticipos' | 'Métricas' | 'Catálogo';
+type PanelTab = 'Pagos y Anticipos' | 'Métricas' | 'Catálogo';
 type CatalogoType = 'servicios' | 'productos';
-
-type Product = { name: string; brand: string; price: string; stock: boolean; image?: string };
-type ServiceItem = {
-  id: string;
-  name: string;
-  duration: string;
-  requiresDeposit: boolean;
-  active: boolean; // true = Disponible, false = Sin servicio
-  icon: string;
-};
-
-const initialProducts: Product[] = [
-  { brand: 'L’Oréal Professionnel', name: 'Vitamino Color Spectrum · Acondicionador', price: '$520', stock: true, image: 'https://www.sephora.com/productimages/sku/s2717411-main-zoom.jpg' },
-  { brand: 'Wella Professionals', name: 'Color Fresh Mask · Copper Glow', price: '$690', stock: true, image: 'https://wella.bynder.com/m/cdb6a5785d08b9f5/original/Wella_Professionals_Color_Fresh_Mask_Copper_Glow_150ml_PI_1.png' },
-  { brand: 'Olaplex', name: 'No.5 Bond Maintenance · Acondicionador', price: '$780', stock: false, image: 'https://olaplex.com/cdn/shop/articles/Large_JPG-TEXTURE_N5_WHITE_BG_W_PRODUCT_3000x3000_0faafb22-1f16-42ff-b774-7361fdaa005f.jpg?v=1706268308&width=1200' },
-  { brand: 'Kérastase', name: 'Chroma Absolu Fondant', price: '$1,150', stock: true, image: 'https://www.kerastase.com.br/dw/image/v2/AAFM_PRD/on/demandware.static/-/Sites-kerastase-master-catalog/pt_BR/dw831df1bc/images/KRBR00119/condicionador-kerastase-%20chroma-absolu-fondant-cica-chroma.jpg' },
-];
-
-const initialServices: ServiceItem[] = [
-  { id: 's1', name: 'Cortes de Cabello', duration: '20–45 MIN', requiresDeposit: false, active: true, icon: '✂' },
-  { id: 's2', name: 'Perfilado de Barba', duration: '15–20 MIN', requiresDeposit: false, active: true, icon: '◯' },
-  { id: 's3', name: 'Colorimetría', duration: '2–8 HORAS', requiresDeposit: true, active: true, icon: '✦' },
-  { id: 's4', name: 'Maquillaje y Peinado', duration: '45–90 MIN', requiresDeposit: false, active: true, icon: '★' },
-  { id: 's5', name: 'Depilaciones', duration: '15–45 MIN', requiresDeposit: false, active: true, icon: '✿' },
-  { id: 's6', name: 'Alaciados Progresivos', duration: '3–5 HORAS', requiresDeposit: true, active: true, icon: '♡' },
-];
-
-const deposits = [
-  { client: 'Lucía Ramírez', date: '21 oct 2026', service: 'Coloración completa', amount: '$500', initials: 'LR' },
-  { client: 'Mariana Torres', date: '20 oct 2026', service: 'Corte y peinado', amount: '$300', initials: 'MT' },
-  { client: 'Sofía Morales', date: '18 oct 2026', service: 'Keratina y sellado', amount: '$250', initials: 'SM' },
-  { client: 'Camila Reyes', date: '16 oct 2026', service: 'Diseño de ceja', amount: '$150', initials: 'CR' },
-];
-
-const weekly = [
-  { label: 'Sem 1', count: 18, height: 47 }, { label: 'Sem 2', count: 24, height: 63 },
-  { label: 'Sem 3', count: 21, height: 55 }, { label: 'Sem 4', count: 31, height: 82 },
-];
 
 export default function PanelGestionScreen() {
   const { logout } = useAuth();
-  const [active, setActive] = useState<PanelTab>('Anticipos');
-  const [catalogoType, setCatalogoType] = useState<CatalogoType>('servicios');
+  const {
+    appointments,
+    mpPayments,
+    clientsList,
+    servicesCatalog,
+    productsCatalog,
+    saveServiceCatalog,
+    toggleServiceActive,
+    saveProductCatalog,
+    toggleProductStock,
+  } = useSalon();
 
-  // Estado de productos
-  const [products, setProducts] = useState(initialProducts);
+  const [active, setActive] = useState<PanelTab>('Pagos y Anticipos');
+  const [catalogoType, setCatalogoType] = useState<CatalogoType>('servicios');
+  const [paymentFilter, setPaymentFilter] = useState<'todos' | 'anticipos' | 'completos' | 'pendientes' | 'efectivo'>('todos');
+
+  // Formulario de producto
   const [showProductForm, setShowProductForm] = useState(false);
   const [productName, setProductName] = useState('');
+  const [productBrand, setProductBrand] = useState('');
   const [productPrice, setProductPrice] = useState('');
-  const [editingProductIndex, setEditingProductIndex] = useState<number | null>(null);
+  const [editingProduct, setEditingProduct] = useState<ProductCatalogItem | null>(null);
 
-  // Estado de servicios
-  const [services, setServices] = useState(initialServices);
+  // Formulario de servicio
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [serviceName, setServiceName] = useState('');
   const [serviceDuration, setServiceDuration] = useState('');
   const [serviceRequiresDeposit, setServiceRequiresDeposit] = useState(false);
-  const [editingServiceIndex, setEditingServiceIndex] = useState<number | null>(null);
+  const [editingService, setEditingService] = useState<ServiceCatalogItem | null>(null);
 
-  // Funciones de productos
-  const saveProduct = () => {
+  const saveProduct = async () => {
     if (!productName.trim()) return;
-    if (editingProductIndex !== null) {
-      setProducts(products.map((pItem, idx) =>
-        idx === editingProductIndex ? { ...pItem, name: productName.trim(), price: productPrice.trim() || 'Por definir' } : pItem
-      ));
-    } else {
-      setProducts([{ brand: 'Yoss Beauty Salon', name: productName.trim(), price: productPrice.trim() || 'Por definir', stock: true }, ...products]);
-    }
-    setProductName(''); setProductPrice(''); setEditingProductIndex(null); setShowProductForm(false);
+    const numericPrice = parseFloat(productPrice.replace(/[^\d.]/g, '')) || 0;
+    await saveProductCatalog({
+      id: editingProduct?.id,
+      brand: productBrand.trim() || editingProduct?.brand || 'Yoss Beauty Salon',
+      name: productName.trim(),
+      price: numericPrice,
+      stock: editingProduct ? editingProduct.stock : true,
+      image: editingProduct?.image,
+      active: true,
+    });
+    setProductName('');
+    setProductBrand('');
+    setProductPrice('');
+    setEditingProduct(null);
+    setShowProductForm(false);
   };
 
-  const editProduct = (index: number) => {
-    setEditingProductIndex(index);
-    setProductName(products[index].name);
-    setProductPrice(products[index].price);
+  const editProduct = (item: ProductCatalogItem) => {
+    setEditingProduct(item);
+    setProductBrand(item.brand);
+    setProductName(item.name);
+    setProductPrice(String(item.price));
     setShowProductForm(true);
   };
 
-  // Funciones de servicios
-  const saveService = () => {
+  const saveService = async () => {
     if (!serviceName.trim()) return;
-    if (editingServiceIndex !== null) {
-      setServices(services.map((sItem, idx) =>
-        idx === editingServiceIndex
-          ? { ...sItem, name: serviceName.trim(), duration: serviceDuration.trim() || '30 MIN', requiresDeposit: serviceRequiresDeposit }
-          : sItem
-      ));
-    } else {
-      setServices([
-        {
-          id: `s-${Date.now()}`,
-          name: serviceName.trim(),
-          duration: serviceDuration.trim() || '30 MIN',
-          requiresDeposit: serviceRequiresDeposit,
-          active: true,
-          icon: '✂',
-        },
-        ...services,
-      ]);
-    }
-    setServiceName(''); setServiceDuration(''); setServiceRequiresDeposit(false); setEditingServiceIndex(null); setShowServiceForm(false);
+    await saveServiceCatalog({
+      id: editingService?.id,
+      nombre: serviceName.trim(),
+      duracion: serviceDuration.trim() || '30 MIN',
+      requiresDeposit: serviceRequiresDeposit,
+      depositAmount: serviceRequiresDeposit ? (editingService?.depositAmount || 300) : 0,
+      icon: editingService?.icon || '✂️',
+      tags: editingService?.tags || [],
+      descripcion: editingService?.descripcion || 'Servicio profesional en Yoss Beauty Salon.',
+      active: editingService ? editingService.active : true,
+    });
+    setServiceName('');
+    setServiceDuration('');
+    setServiceRequiresDeposit(false);
+    setEditingService(null);
+    setShowServiceForm(false);
   };
 
-  const editService = (index: number) => {
-    setEditingServiceIndex(index);
-    setServiceName(services[index].name);
-    setServiceDuration(services[index].duration);
-    setServiceRequiresDeposit(services[index].requiresDeposit);
+  const editService = (item: ServiceCatalogItem) => {
+    setEditingService(item);
+    setServiceName(item.nombre);
+    setServiceDuration(item.duracion);
+    setServiceRequiresDeposit(item.requiresDeposit);
     setShowServiceForm(true);
   };
 
+  // ── CÁLCULO REAL DE MÉTRICAS GLOBALES (SOLO MERCADO PAGO EN SUPABASE) ──
+  const nowMs = Date.now();
+
+  const totalAnticiposMP = useMemo(() => {
+    return mpPayments
+      .filter((pay) => pay.estado === 'aprobado' && pay.tipoPago === 'anticipo')
+      .reduce((acc, pay) => acc + pay.monto, 0);
+  }, [mpPayments]);
+
+  const totalPagosCompletosMP = useMemo(() => {
+    return mpPayments
+      .filter((pay) => pay.estado === 'aprobado' && pay.tipoPago === 'pago_completo')
+      .reduce((acc, pay) => acc + pay.monto, 0);
+  }, [mpPayments]);
+
+  const totalRecaudadoMP = totalAnticiposMP + totalPagosCompletosMP;
+
+  const citasPendientesHold = useMemo(
+    () => appointments.filter((a) => a.status === 'Pendiente anticipo' && (!a.expiresAt || a.expiresAt > nowMs)),
+    [appointments, nowMs]
+  );
+
+  const totalCitasEfectivo = useMemo(
+    () => appointments.filter((a) => a.paymentMethod === 'efectivo' && a.status !== 'Cancelada' && a.status !== 'Expirada').length,
+    [appointments]
+  );
+
+  type Movimiento = {
+    id: string;
+    client: string;
+    initials: string;
+    service: string;
+    date: string;
+    amount: string;
+    method: 'efectivo' | 'mercadopago';
+    category: 'anticipo' | 'completo' | 'efectivo';
+    status: string;
+    tone: 'olive' | 'amber' | 'red' | 'gray';
+  };
+
+  const movimientosCitas: Movimiento[] = useMemo(() => {
+    return appointments
+      .filter((a) => a.status !== 'Expirada' && a.status !== 'Cancelada')
+      .map((a) => {
+        const isCash = a.paymentMethod === 'efectivo';
+        const initials = a.client.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'CL';
+
+        let amount = '';
+        let statusText = '';
+        let category: 'anticipo' | 'completo' | 'efectivo' = 'efectivo';
+        let tone: 'olive' | 'amber' | 'red' | 'gray' = 'gray';
+
+        if (isCash) {
+          amount = 'Cobro en salón';
+          statusText = a.status === 'Aceptada' ? 'Efectivo en salón' : a.status;
+          category = 'efectivo';
+          tone = a.status === 'Aceptada' || a.status === 'Finalizada' ? 'olive' : 'gray';
+        } else if (a.status === 'Pendiente anticipo') {
+          amount = `$${a.depositAmount || 300} MXN`;
+          statusText = 'Anticipo en espera (Hold 15m)';
+          category = 'anticipo';
+          tone = 'amber';
+        } else if (a.depositAmount && a.depositAmount > 0) {
+          amount = `$${a.depositAmount} MXN`;
+          statusText = 'Anticipo validado';
+          category = 'anticipo';
+          tone = 'olive';
+        } else {
+          amount = 'Por cotizar';
+          statusText = 'MP pendiente (Sin precio fijo)';
+          category = 'completo';
+          tone = 'amber';
+        }
+
+        return {
+          id: a.id,
+          client: a.client,
+          initials,
+          service: a.service,
+          date: `${a.date} · ${a.time}`,
+          amount,
+          method: a.paymentMethod || (a.status === 'Pendiente anticipo' ? 'mercadopago' : 'efectivo'),
+          category,
+          status: statusText,
+          tone,
+        };
+      });
+  }, [appointments]);
+
+  const movimientosFiltrados = movimientosCitas.filter((m) => {
+    if (paymentFilter === 'todos') return true;
+    if (paymentFilter === 'anticipos') return m.category === 'anticipo' && m.status === 'Anticipo validado';
+    if (paymentFilter === 'completos') return m.category === 'completo';
+    if (paymentFilter === 'pendientes') return m.status.includes('Hold') || m.status.includes('espera');
+    if (paymentFilter === 'efectivo') return m.category === 'efectivo';
+    return true;
+  });
+
+  // ── MÉTRICAS REALES (últimas 4 semanas desde citas en Supabase) ──
+  const metricsData = useMemo(() => {
+    const activeApts = appointments.filter((a) => a.status !== 'Cancelada' && a.status !== 'Expirada');
+    const attendedCount = appointments.filter((a) => a.status === 'Finalizada' || a.status === 'Aceptada').length;
+
+    const now = new Date();
+    const weeks = [3, 2, 1, 0].map((weeksAgo, idx) => {
+      const end = new Date(now);
+      end.setDate(now.getDate() - weeksAgo * 7);
+      const start = new Date(end);
+      start.setDate(end.getDate() - 6);
+
+      const startIso = start.toISOString().slice(0, 10);
+      const endIso = end.toISOString().slice(0, 10);
+      const count = activeApts.filter((a) => a.isoDate >= startIso && a.isoDate <= endIso).length;
+      return { label: `Sem ${idx + 1}`, count };
+    });
+
+    const maxCount = Math.max(1, ...weeks.map((w) => w.count));
+    const bars = weeks.map((w) => ({
+      ...w,
+      height: w.count === 0 ? 6 : Math.max(16, Math.round((w.count / maxCount) * 86)),
+    }));
+
+    return {
+      attendedCount,
+      totalActive: activeApts.length,
+      registeredClients: clientsList.length,
+      bars,
+    };
+  }, [appointments, clientsList]);
+
   return (
     <ScrollView style={p.page} contentContainerStyle={p.scroll} showsVerticalScrollIndicator={false}>
-      <PageHeader eyebrow="Panel administrador" title="Gestión" subtitle="Anticipos, actividad del salón y catálogo." />
+      <PageHeader eyebrow="Panel administrador" title="Gestión" subtitle="Pagos, anticipos, actividad real del salón y catálogo." />
 
       <View style={styles.tabs}>
-        {(['Anticipos', 'Métricas', 'Catálogo'] as PanelTab[]).map(tab => (
+        {(['Pagos y Anticipos', 'Métricas', 'Catálogo'] as PanelTab[]).map((tab) => (
           <TouchableOpacity
             key={tab}
             onPress={() => setActive(tab)}
@@ -137,79 +244,197 @@ export default function PanelGestionScreen() {
         ))}
       </View>
 
-      {/* ── SECCIÓN ANTICIPOS ── */}
-      {active === 'Anticipos' && (
+      {/* ── SECCIÓN PAGOS Y ANTICIPOS ── */}
+      {active === 'Pagos y Anticipos' && (
         <View style={styles.section}>
           <View style={[p.card, styles.totalCard]}>
-            <View>
-              <Text style={styles.totalLabel}>ANTICIPOS REGISTRADOS · OCTUBRE</Text>
-              <Text style={styles.totalAmount}>$1,200 <Text style={styles.currency}>MXN</Text></Text>
-              <Text style={styles.totalCaption}>4 clientes con anticipo registrado</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.totalLabel}>RECAUDACIÓN REGISTRADA EN APP · MERCADO PAGO</Text>
+              <Text style={styles.totalAmount}>
+                ${totalRecaudadoMP.toLocaleString()} <Text style={styles.currency}>MXN</Text>
+              </Text>
+              <Text style={styles.totalCaption}>Control contable de ingresos digitales: Anticipos validados por Mercado Pago</Text>
             </View>
-            <Text style={{ fontSize: 27 }}>💳</Text>
+            <Text style={{ fontSize: 32 }}>💙</Text>
           </View>
-          <View style={p.row}><Text style={styles.sectionTitle}>Movimientos recientes</Text><StatusPill label="Octubre 2026" tone="gray" /></View>
-          {deposits.map(deposit => (
-            <View key={deposit.client} style={[p.card, styles.depositRow]}>
-              <View style={styles.avatar}><Text style={styles.initials}>{deposit.initials}</Text></View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.client}>{deposit.client}</Text>
-                <Text style={p.muted}>{deposit.service}</Text>
-                <Text style={styles.depositDate}>Recibido el {deposit.date}</Text>
+
+          <View style={styles.metricGrid3}>
+            <View style={[p.card, styles.metricCardSmall]}>
+              <View style={styles.metricIconRow}>
+                <Text style={styles.metricCardIcon}>💙</Text>
+                <Text style={[styles.metricCardBadge, { color: '#0277BD', backgroundColor: '#E1F5FE' }]}>Activo</Text>
               </View>
-              <Text style={styles.amount}>{deposit.amount}</Text>
+              <Text style={[styles.metricCardValue, { color: '#009EE3' }]}>
+                ${totalAnticiposMP.toLocaleString()} <Text style={styles.metricCardCur}>MXN</Text>
+              </Text>
+              <Text style={styles.metricCardTitle}>Anticipos MP</Text>
+              <Text style={styles.metricCardSub}>Colorimetría y alaciados</Text>
             </View>
-          ))}
-          <Text style={styles.note}>Datos de ejemplo · los anticipos deben verificarse antes de conectarlos con pagos reales.</Text>
+
+            <View style={[p.card, styles.metricCardSmall]}>
+              <View style={styles.metricIconRow}>
+                <Text style={styles.metricCardIcon}>💳</Text>
+                <Text style={[styles.metricCardBadge, { color: '#B45309', backgroundColor: '#FEF3C7' }]}>Pendiente</Text>
+              </View>
+              <Text style={[styles.metricCardValue, { color: '#B45309' }]}>
+                ${totalPagosCompletosMP.toLocaleString()} <Text style={styles.metricCardCur}>MXN</Text>
+              </Text>
+              <Text style={styles.metricCardTitle}>Pagos completos MP</Text>
+              <Text style={styles.metricCardSub}>Servicios sin precio fijo</Text>
+            </View>
+
+            <View style={[p.card, styles.metricCardSmall]}>
+              <View style={styles.metricIconRow}>
+                <Text style={styles.metricCardIcon}>⏱️</Text>
+                <Text style={[styles.metricCardBadge, { color: '#B45309', backgroundColor: '#FEF3C7' }]}>Hold 15m</Text>
+              </View>
+              <Text style={[styles.metricCardValue, { color: '#B45309' }]}>{citasPendientesHold.length}</Text>
+              <Text style={styles.metricCardTitle}>En espera</Text>
+              <Text style={styles.metricCardSub}>Apartados temporales</Text>
+            </View>
+          </View>
+
+          <View style={styles.cashInfoCard}>
+            <Text style={{ fontSize: 20 }}>💵</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cashInfoTitle}>Control de Efectivo en Salón ({totalCitasEfectivo} citas registradas)</Text>
+              <Text style={styles.cashInfoSub}>
+                Los servicios cotidianos se liquidan en efectivo directamente en el salón según la cotización física y largo del cabello. No se suman a la contabilidad digital de la app.
+              </Text>
+            </View>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBar}>
+            {(
+              [
+                { id: 'todos', label: 'Todos' },
+                { id: 'anticipos', label: '💙 Anticipos validados' },
+                { id: 'completos', label: '💳 Pagos completos MP (Pendiente)' },
+                { id: 'pendientes', label: '⏱️ En espera' },
+                { id: 'efectivo', label: '💵 Citas en efectivo' },
+              ] as const
+            ).map((f) => {
+              const isSelected = paymentFilter === f.id;
+              return (
+                <TouchableOpacity
+                  key={f.id}
+                  style={[styles.filterChip, isSelected && styles.filterChipActive]}
+                  onPress={() => setPaymentFilter(f.id)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          <View style={p.row}>
+            <Text style={styles.sectionTitle}>Movimientos y pagos registrados</Text>
+            <StatusPill label={`${movimientosFiltrados.length} registros`} tone="gray" />
+          </View>
+
+          {movimientosFiltrados.length === 0 ? (
+            <View style={[p.card, { alignItems: 'center', paddingVertical: 26, gap: 6 }]}>
+              <Text style={{ fontSize: 28 }}>💳</Text>
+              <Text style={styles.client}>Sin movimientos registrados aún</Text>
+              <Text style={[p.muted, { textAlign: 'center' }]}>
+                Aquí aparecerán los anticipos de Mercado Pago y citas en efectivo conforme se agenden en la aplicación.
+              </Text>
+            </View>
+          ) : (
+            movimientosFiltrados.map((mov) => (
+              <View key={mov.id} style={[p.card, styles.depositRow]}>
+                <View style={[styles.avatar, mov.method === 'mercadopago' ? styles.avatarMp : styles.avatarCash]}>
+                  <Text style={[styles.initials, mov.method === 'mercadopago' ? styles.initialsMp : styles.initialsCash]}>
+                    {mov.initials}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={p.row}>
+                    <Text style={styles.client}>{mov.client}</Text>
+                    <View style={[styles.methodBadge, mov.method === 'mercadopago' ? styles.methodBadgeMp : styles.methodBadgeCash]}>
+                      <Text style={[styles.methodBadgeText, mov.method === 'mercadopago' ? styles.methodBadgeTextMp : styles.methodBadgeTextCash]}>
+                        {mov.method === 'mercadopago' ? '💙 MP' : '💵 Efectivo'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={p.muted}>{mov.service}</Text>
+                  <Text style={styles.depositDate}>{mov.date}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  <Text style={styles.amount}>{mov.amount}</Text>
+                  <StatusPill label={mov.status} tone={mov.tone} />
+                </View>
+              </View>
+            ))
+          )}
+
+          <Text style={styles.note}>
+            La app controla numéricamente los anticipos y cobros recibidos mediante Mercado Pago. El efectivo se gestiona en caja física al acudir la clienta.
+          </Text>
         </View>
       )}
 
-      {/* ── SECCIÓN MÉTRICAS ── */}
+      {/* ── SECCIÓN MÉTRICAS REALES ── */}
       {active === 'Métricas' && (
         <View style={styles.section}>
           <View style={[p.card, styles.metricIntro]}>
-            <Text style={styles.totalLabel}>CLIENTES ATENDIDAS</Text>
+            <Text style={styles.totalLabel}>CITAS CONFIRMADAS Y ATENDIDAS</Text>
             <View style={p.row}>
-              <Text style={styles.metricTotal}>94</Text>
-              <StatusPill label="Último mes" tone="olive" />
+              <Text style={styles.metricTotal}>{metricsData.attendedCount}</Text>
+              <StatusPill label="Tiempo real" tone="olive" />
             </View>
-            <Text style={p.muted}>Personas registradas por semana en octubre.</Text>
+            <Text style={p.muted}>Conteo real de citas confirmadas o finalizadas en Supabase.</Text>
           </View>
+
           <View style={[p.card, styles.chartCard]}>
             <View style={p.row}>
-              <Text style={styles.sectionTitle}>Clientes por semana</Text>
-              <Text style={styles.chartUnit}>CLIENTES</Text>
+              <Text style={styles.sectionTitle}>Actividad de últimas 4 semanas</Text>
+              <Text style={styles.chartUnit}>CITAS</Text>
             </View>
             <View style={styles.chart}>
-              {weekly.map((item, i) => (
+              {metricsData.bars.map((item, i) => (
                 <View key={item.label} style={styles.barColumn}>
                   <Text style={styles.barValue}>{item.count}</Text>
-                  <View style={[styles.bar, { height: item.height, backgroundColor: i === 3 ? colors.primary[500] : colors.primary[200] }]} />
+                  <View
+                    style={[
+                      styles.bar,
+                      {
+                        height: item.height,
+                        backgroundColor: i === 3 ? colors.primary[500] : colors.primary[200],
+                      },
+                    ]}
+                  />
                   <Text style={styles.barLabel}>{item.label}</Text>
                 </View>
               ))}
             </View>
-            <View style={styles.axis}><Text>1 oct</Text><Text>31 oct</Text></View>
+            <View style={styles.axis}>
+              <Text>Hace 4 sem</Text>
+              <Text>Esta semana</Text>
+            </View>
           </View>
+
           <View style={styles.metricTiles}>
             <View style={[p.card, styles.metricTile]}>
-              <Text style={styles.tileIcon}>↗</Text>
-              <Text style={styles.tileValue}>+18%</Text>
-              <Text style={p.muted}>vs. mes anterior</Text>
+              <Text style={styles.tileIcon}>👤</Text>
+              <Text style={styles.tileValue}>{metricsData.registeredClients}</Text>
+              <Text style={p.muted}>clientas registradas</Text>
             </View>
             <View style={[p.card, styles.metricTile]}>
               <Text style={styles.tileIcon}>✦</Text>
-              <Text style={styles.tileValue}>24</Text>
-              <Text style={p.muted}>promedio semanal</Text>
+              <Text style={styles.tileValue}>{metricsData.totalActive}</Text>
+              <Text style={p.muted}>citas totales activas</Text>
             </View>
           </View>
         </View>
       )}
 
-      {/* ── SECCIÓN CATÁLOGO (SERVICIOS Y PRODUCTOS) ── */}
+      {/* ── SECCIÓN CATÁLOGO (SERVICIOS Y PRODUCTOS EN SUPABASE) ── */}
       {active === 'Catálogo' && (
         <View style={styles.section}>
-          {/* Subpestañas Servicios / Productos */}
           <View style={styles.subTabsContainer}>
             <TouchableOpacity
               style={[styles.subTab, catalogoType === 'servicios' && styles.subTabActive]}
@@ -229,18 +454,17 @@ export default function PanelGestionScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* ──────── VISTA CATÁLOGO DE SERVICIOS ──────── */}
           {catalogoType === 'servicios' && (
             <>
               <View style={p.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sectionTitle}>Catálogo de servicios</Text>
-                  <Text style={p.muted}>Edita servicios, duración y disponibilidad.</Text>
+                  <Text style={p.muted}>Edita servicios, duración y disponibilidad en vivo.</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={() => {
-                    setEditingServiceIndex(null);
+                    setEditingService(null);
                     setServiceName('');
                     setServiceDuration('');
                     setServiceRequiresDeposit(false);
@@ -254,7 +478,7 @@ export default function PanelGestionScreen() {
               {showServiceForm && (
                 <View style={[p.card, styles.addForm]}>
                   <Text style={styles.formTitle}>
-                    {editingServiceIndex === null ? 'Nuevo servicio' : 'Editar servicio'}
+                    {editingService ? 'Editar servicio' : 'Nuevo servicio'}
                   </Text>
                   <TextInput
                     value={serviceName}
@@ -266,7 +490,7 @@ export default function PanelGestionScreen() {
                   <TextInput
                     value={serviceDuration}
                     onChangeText={setServiceDuration}
-                    placeholder="Duración (ej. 20–45 MIN)"
+                    placeholder="Duración (ej. 30 MIN)"
                     style={p.input}
                     placeholderTextColor={colors.beige[400]}
                   />
@@ -283,21 +507,21 @@ export default function PanelGestionScreen() {
                   </View>
                   <TouchableOpacity style={p.button} onPress={saveService}>
                     <Text style={p.buttonText}>
-                      {editingServiceIndex === null ? 'Agregar al catálogo' : 'Guardar cambios'}
+                      {editingService ? 'Guardar cambios' : 'Agregar al catálogo'}
                     </Text>
                   </TouchableOpacity>
                 </View>
               )}
 
-              {services.map((service, i) => (
-                <View key={`${service.id}-${i}`} style={[p.card, styles.itemRow]}>
+              {servicesCatalog.map((service) => (
+                <View key={service.id} style={[p.card, styles.itemRow]}>
                   <View style={styles.serviceThumb}>
                     <Text style={{ fontSize: 20 }}>{service.icon}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.productName}>{service.name}</Text>
+                    <Text style={styles.productName}>{service.nombre}</Text>
                     <View style={[p.row, { justifyContent: 'flex-start', gap: 6, marginTop: 4 }]}>
-                      <Text style={styles.serviceMetaText}>{service.duration}</Text>
+                      <Text style={styles.serviceMetaText}>{service.duracion}</Text>
                       {service.requiresDeposit && (
                         <View style={styles.depositBadge}>
                           <Text style={styles.depositBadgeText}>Anticipo</Text>
@@ -310,17 +534,11 @@ export default function PanelGestionScreen() {
                     </View>
                   </View>
                   <View style={styles.productActions}>
-                    <TouchableOpacity onPress={() => editService(i)} style={styles.stockButton}>
+                    <TouchableOpacity onPress={() => editService(service)} style={styles.stockButton}>
                       <Text style={styles.stockButtonText}>Editar</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() =>
-                        setServices(
-                          services.map((item, index) =>
-                            index === i ? { ...item, active: !item.active } : item
-                          )
-                        )
-                      }
+                      onPress={() => toggleServiceActive(service.id, !service.active)}
                       style={[
                         styles.stockButton,
                         service.active ? styles.btnInactive : styles.btnActive,
@@ -341,18 +559,18 @@ export default function PanelGestionScreen() {
             </>
           )}
 
-          {/* ──────── VISTA CATÁLOGO DE PRODUCTOS ──────── */}
           {catalogoType === 'productos' && (
             <>
               <View style={p.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sectionTitle}>Catálogo de productos</Text>
-                  <Text style={p.muted}>Edita productos, precios y disponibilidad.</Text>
+                  <Text style={p.muted}>Edita productos, precios y disponibilidad en vivo.</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={() => {
-                    setEditingProductIndex(null);
+                    setEditingProduct(null);
+                    setProductBrand('');
                     setProductName('');
                     setProductPrice('');
                     setShowProductForm(!showProductForm);
@@ -365,8 +583,15 @@ export default function PanelGestionScreen() {
               {showProductForm && (
                 <View style={[p.card, styles.addForm]}>
                   <Text style={styles.formTitle}>
-                    {editingProductIndex === null ? 'Nuevo producto' : 'Editar producto'}
+                    {editingProduct ? 'Editar producto' : 'Nuevo producto'}
                   </Text>
+                  <TextInput
+                    value={productBrand}
+                    onChangeText={setProductBrand}
+                    placeholder="Marca (ej. Olaplex)"
+                    style={p.input}
+                    placeholderTextColor={colors.beige[400]}
+                  />
                   <TextInput
                     value={productName}
                     onChangeText={setProductName}
@@ -377,20 +602,21 @@ export default function PanelGestionScreen() {
                   <TextInput
                     value={productPrice}
                     onChangeText={setProductPrice}
-                    placeholder="Precio · ej. $450"
+                    placeholder="Precio numérico · ej. 450"
+                    keyboardType="numeric"
                     style={p.input}
                     placeholderTextColor={colors.beige[400]}
                   />
                   <TouchableOpacity style={p.button} onPress={saveProduct}>
                     <Text style={p.buttonText}>
-                      {editingProductIndex === null ? 'Agregar al catálogo' : 'Guardar cambios'}
+                      {editingProduct ? 'Guardar cambios' : 'Agregar al catálogo'}
                     </Text>
                   </TouchableOpacity>
                 </View>
               )}
 
-              {products.map((product, i) => (
-                <View key={`${product.name}-${i}`} style={[p.card, styles.itemRow]}>
+              {productsCatalog.map((product) => (
+                <View key={product.id} style={[p.card, styles.itemRow]}>
                   <View style={styles.productThumb}>
                     {product.image ? (
                       <Image
@@ -408,7 +634,7 @@ export default function PanelGestionScreen() {
                     <Text style={styles.brand}>{product.brand.toUpperCase()}</Text>
                     <Text style={styles.productName}>{product.name}</Text>
                     <View style={[p.row, { justifyContent: 'flex-start', gap: 8, marginTop: 5 }]}>
-                      <Text style={styles.productPrice}>{product.price}</Text>
+                      <Text style={styles.productPrice}>{product.priceFormatted}</Text>
                       <StatusPill
                         label={product.stock ? 'En stock' : 'Agotado'}
                         tone={product.stock ? 'olive' : 'red'}
@@ -416,17 +642,11 @@ export default function PanelGestionScreen() {
                     </View>
                   </View>
                   <View style={styles.productActions}>
-                    <TouchableOpacity onPress={() => editProduct(i)} style={styles.stockButton}>
+                    <TouchableOpacity onPress={() => editProduct(product)} style={styles.stockButton}>
                       <Text style={styles.stockButtonText}>Editar</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() =>
-                        setProducts(
-                          products.map((item, index) =>
-                            index === i ? { ...item, stock: !item.stock } : item
-                          )
-                        )
-                      }
+                      onPress={() => toggleProductStock(product.id, !product.stock)}
                       style={styles.stockButton}
                     >
                       <Text style={styles.stockButtonText}>
@@ -438,8 +658,6 @@ export default function PanelGestionScreen() {
               ))}
             </>
           )}
-
-          <Text style={styles.note}>Cambios guardados en esta demostración.</Text>
         </View>
       )}
 
@@ -459,12 +677,8 @@ const styles = StyleSheet.create({
   section: { gap: 10 },
 
   totalCard: {
-    backgroundColor: colors.ink[800],
-    borderColor: colors.ink[800],
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 18,
+    backgroundColor: colors.ink[800], borderColor: colors.ink[800], flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'space-between', padding: 18,
   },
   totalLabel: { color: colors.primary[200], fontSize: 8, letterSpacing: 1.2, fontWeight: '700' },
   totalAmount: { color: colors.white, fontSize: 29, fontWeight: '700', marginTop: 6 },
@@ -494,7 +708,6 @@ const styles = StyleSheet.create({
   tileIcon: { color: colors.primary[500], fontSize: 20 },
   tileValue: { color: colors.ink[800], fontWeight: '700', fontSize: 20 },
 
-  // Subpestañas Catálogo
   subTabsContainer: { flexDirection: 'row', backgroundColor: colors.beige[100], padding: 3, borderRadius: 12, gap: 4, marginBottom: 4 },
   subTab: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 9 },
   subTabActive: { backgroundColor: colors.white, ...theme.shadow.card },
@@ -527,4 +740,38 @@ const styles = StyleSheet.create({
 
   logout: { alignItems: 'center', padding: 10 },
   logoutText: { color: colors.status.error, fontWeight: '700', fontSize: 11 },
+
+  metricGrid3: { flexDirection: 'row', gap: 8 },
+  metricCardSmall: { flex: 1, padding: 12, gap: 4 },
+  metricIconRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  metricCardIcon: { fontSize: 16 },
+  metricCardBadge: { fontSize: 8, fontWeight: '700', color: colors.primary[600], backgroundColor: colors.primary[50], paddingHorizontal: 5, paddingVertical: 2, borderRadius: 6 },
+  metricCardValue: { fontSize: 14, fontWeight: '800', color: colors.ink[800], marginTop: 2 },
+  metricCardCur: { fontSize: 8, fontWeight: '600', color: colors.beige[500] },
+  metricCardTitle: { fontSize: 10, fontWeight: '700', color: colors.ink[800] },
+  metricCardSub: { fontSize: 8, color: colors.ink[700], lineHeight: 11 },
+
+  filterBar: { flexDirection: 'row', gap: 6, marginVertical: 2 },
+  filterChip: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: borderRadius.pill, backgroundColor: colors.beige[100] },
+  filterChipActive: { backgroundColor: colors.primary[500] },
+  filterChipText: { fontSize: 10, fontWeight: '600', color: colors.ink[700] },
+  filterChipTextActive: { color: colors.white, fontWeight: '700' },
+
+  avatarMp: { backgroundColor: '#E1F5FE' },
+  avatarCash: { backgroundColor: colors.primary[50] },
+  initialsMp: { color: '#0277BD' },
+  initialsCash: { color: colors.primary[600] },
+  methodBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginLeft: 6 },
+  methodBadgeMp: { backgroundColor: '#E1F5FE' },
+  methodBadgeCash: { backgroundColor: colors.primary[50] },
+  methodBadgeText: { fontSize: 8, fontWeight: '700' },
+  methodBadgeTextMp: { color: '#0277BD' },
+  methodBadgeTextCash: { color: colors.primary[600] },
+
+  cashInfoCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F5F9F2',
+    borderWidth: 1, borderColor: '#D4E7C5', borderRadius: borderRadius.sm, padding: 12,
+  },
+  cashInfoTitle: { fontSize: 11, fontWeight: '700', color: colors.primary[700] },
+  cashInfoSub: { fontSize: 10, color: colors.ink[700], marginTop: 2, lineHeight: 14 },
 });

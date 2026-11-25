@@ -1,15 +1,6 @@
 /**
  * LoginScreen.tsx
- * Pantalla de inicio de sesión de Yoss Beauty Salon.
- *
- * Mejoras incorporadas:
- * 1. Centrado estricto y estable: el branding y títulos nunca se desalinean ni desacomodan al navegar o refrescar.
- * 2. Seguridad avanzada:
- *    - Protección contra fuerza bruta (bloqueo temporal por 30s tras 5 intentos fallidos con cuenta regresiva).
- *    - Sanitización de entradas (teléfono sólo números, recorte de espacios).
- *    - Atributos seguros de teclado (autoCapitalize none, autoComplete, textContentType).
- * 3. Recuperación de contraseñas completa:
- *    - Flujo guiado en modal: Identificación por teléfono -> Código de seguridad OTP -> Nueva contraseña segura con confirmación.
+ * Pantalla de inicio de sesión de Yoss Beauty Salon conectada a Supabase Auth.
  */
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -28,6 +19,7 @@ import {
   Modal,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   useFonts,
   CormorantGaramond_300Light,
@@ -41,6 +33,7 @@ import {
 } from '@expo-google-fonts/dm-sans';
 
 import { useAuth } from '@/context/AuthContext';
+import { isSupabaseConfigured } from '@/services/supabase';
 import { theme } from '@/constants/YossTheme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -86,7 +79,8 @@ interface Props {
 }
 
 export default function LoginScreen({ onNavigateToRegister }: Props) {
-  const { setUserRole } = useAuth();
+  const { signIn, sendPasswordReset } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [fontsLoaded] = useFonts({
     CormorantGaramond_300Light,
@@ -97,28 +91,25 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
     DMSans_600SemiBold,
   });
 
-  const [phone, setPhone] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [phoneFocused, setPhoneFocused] = useState(false);
+  const [idFocused, setIdFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
   // Seguridad: Control de intentos fallidos
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutTimer, setLockoutTimer] = useState(0);
 
-  // Modal de recuperación de contraseña
+  // Modal de recuperación de contraseña por correo (Supabase Auth)
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
-  const [recoveryStep, setRecoveryStep] = useState<1 | 2 | 3>(1);
-  const [recoveryPhone, setRecoveryPhone] = useState('');
-  const [recoveryCode, setRecoveryCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [recoveryEmail, setRecoveryEmail] = useState('');
   const [recoveryError, setRecoveryError] = useState('');
-  const [recoverySuccess, setRecoverySuccess] = useState(false);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoverySent, setRecoverySent] = useState(false);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const passwordRef = useRef<any>(null);
@@ -128,7 +119,6 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
   const mediumFont = fontsLoaded ? fonts.bodyMedium : theme.fontFallback.body;
   const semiBoldFont = fontsLoaded ? fonts.bodySemiBold : theme.fontFallback.body;
 
-  // Temporizador de bloqueo por fuerza bruta
   useEffect(() => {
     let interval: any = null;
     if (lockoutTimer > 0) {
@@ -156,16 +146,16 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
       return;
     }
 
-    const cleanPhone = phone.trim().replace(/[^\d]/g, '');
+    const cleanId = identifier.trim();
     const cleanPassword = password.trim();
 
-    if (!cleanPhone || !cleanPassword) {
-      setError('Por favor ingresa tu número de teléfono y contraseña.');
+    if (!cleanId || !cleanPassword) {
+      setError('Por favor ingresa tu teléfono o correo y contraseña.');
       triggerShake();
       return;
     }
 
-    if (cleanPhone.length < 3) {
+    if (!cleanId.includes('@') && cleanId.replace(/[^\d]/g, '').length < 3) {
       setError('Número de teléfono inválido.');
       triggerShake();
       return;
@@ -175,18 +165,9 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
     setSuccessMsg('');
     setIsLoading(true);
 
-    await new Promise((r) => setTimeout(r, 700));
+    const res = await signIn(cleanId, cleanPassword);
 
-    // Verificación de credenciales
-    if (cleanPhone === '123' && cleanPassword === 'admin') {
-      setFailedAttempts(0);
-      setUserRole('admin');
-    } else if (cleanPassword.length >= 4) {
-      // Acceso de cliente válido
-      setFailedAttempts(0);
-      setUserRole('cliente');
-    } else {
-      // Contraseña incorrecta
+    if (res.error) {
       const attempts = failedAttempts + 1;
       setFailedAttempts(attempts);
 
@@ -194,63 +175,45 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
         setLockoutTimer(30);
         setError('Acceso bloqueado por seguridad durante 30 segundos (5 intentos fallidos).');
       } else {
-        setError(`Credenciales incorrectas. Intento ${attempts} de 5.`);
+        setError(`${res.error} (Intento ${attempts} de 5)`);
       }
       triggerShake();
+    } else {
+      setFailedAttempts(0);
     }
 
     setIsLoading(false);
   };
 
-  // ── Handlers de Recuperación de Contraseña ──
-  const handleRequestRecoveryCode = () => {
-    const clean = recoveryPhone.trim().replace(/[^\d]/g, '');
-    if (clean.length < 10) {
-      setRecoveryError('Ingresa un teléfono válido de 10 dígitos.');
+  const handleSendResetEmail = async () => {
+    const clean = recoveryEmail.trim().toLowerCase();
+    if (!clean || !clean.includes('@')) {
+      setRecoveryError('Ingresa un correo electrónico válido.');
       return;
     }
     setRecoveryError('');
-    setRecoveryStep(2);
-  };
+    setRecoveryLoading(true);
+    const res = await sendPasswordReset(clean);
+    setRecoveryLoading(false);
 
-  const handleVerifyCode = () => {
-    if (recoveryCode.trim().length < 4) {
-      setRecoveryError('Ingresa el código de 4 o 6 dígitos.');
+    if (res.error) {
+      setRecoveryError(res.error);
       return;
     }
-    setRecoveryError('');
-    setRecoveryStep(3);
-  };
 
-  const handleSetNewPassword = () => {
-    if (newPassword.length < 6) {
-      setRecoveryError('La contraseña debe tener al menos 6 caracteres.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setRecoveryError('Las contraseñas no coinciden.');
-      return;
-    }
-    setRecoveryError('');
-    setRecoverySuccess(true);
-
+    setRecoverySent(true);
     setTimeout(() => {
       setShowRecoveryModal(false);
-      setRecoverySuccess(false);
-      setRecoveryStep(1);
-      setRecoveryPhone('');
-      setRecoveryCode('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setSuccessMsg('Tu contraseña ha sido actualizada. Inicia sesión con tu nueva clave.');
-    }, 1200);
+      setRecoverySent(false);
+      setRecoveryEmail('');
+      setSuccessMsg('Se envió un enlace de recuperación a tu correo electrónico.');
+    }, 1500);
   };
 
   return (
     <View style={s.root}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
 
-      {/* ── Banda superior decorativa ── */}
       <View style={s.topBand} />
 
       <KeyboardAvoidingView
@@ -258,12 +221,18 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
         style={s.kbView}
       >
         <ScrollView
-          contentContainerStyle={s.scroll}
+          contentContainerStyle={[
+            s.scroll,
+            {
+              paddingTop: Math.max(insets.top + 18, Platform.OS === 'ios' ? 60 : 48),
+              paddingBottom: Math.max(insets.bottom + 20, spacing.xl),
+            },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
           <View style={s.centerContainer}>
-            {/* ── Branding perfectamente centrado ── */}
+            {/* ── Branding ── */}
             <View style={s.brand}>
               <View style={s.brandLine} />
               <Text style={[s.brandSub, { fontFamily: mediumFont }]}>
@@ -286,7 +255,15 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
                 Accede a tu cuenta para gestionar tus citas
               </Text>
 
-              {/* Mensaje de éxito de recuperación */}
+              {!isSupabaseConfigured && (
+                <View style={s.errorBox}>
+                  <View style={s.errorDot} />
+                  <Text style={[s.errorText, { fontFamily: mediumFont }]}>
+                    Atención: esta compilación no tiene configuradas las variables de Supabase (EXPO_PUBLIC_SUPABASE_URL).
+                  </Text>
+                </View>
+              )}
+
               {successMsg !== '' && (
                 <View style={s.successBox}>
                   <Text style={s.successIcon}>✓</Text>
@@ -294,7 +271,6 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
                 </View>
               )}
 
-              {/* Error */}
               {error !== '' && (
                 <View style={s.errorBox}>
                   <View style={s.errorDot} />
@@ -302,31 +278,30 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
                 </View>
               )}
 
-              {/* Teléfono */}
+              {/* Teléfono o Correo */}
               <View style={s.field}>
-                <Text style={[s.label, { fontFamily: semiBoldFont }]}>Teléfono</Text>
-                <View style={[s.inputRow, phoneFocused && s.inputRowFocused]}>
+                <Text style={[s.label, { fontFamily: semiBoldFont }]}>Teléfono o Correo</Text>
+                <View style={[s.inputRow, idFocused && s.inputRowFocused]}>
                   <TextInput
                     style={[s.input, { fontFamily: bodyFont }]}
-                    placeholder="10 dígitos"
+                    placeholder="10 dígitos o tu@correo.com"
                     placeholderTextColor={colors.beige[400]}
-                    keyboardType="phone-pad"
+                    keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    textContentType="telephoneNumber"
-                    autoComplete="tel"
+                    textContentType="username"
+                    autoComplete="username"
                     returnKeyType="next"
-                    value={phone}
+                    value={identifier}
                     onChangeText={(t) => {
-                      setPhone(t);
+                      setIdentifier(t);
                       if (error) setError('');
                     }}
-                    onFocus={() => setPhoneFocused(true)}
-                    onBlur={() => setPhoneFocused(false)}
+                    onFocus={() => setIdFocused(true)}
+                    onBlur={() => setIdFocused(false)}
                     onSubmitEditing={() => passwordRef.current?.focus()}
-                    maxLength={15}
                     accessible
-                    accessibilityLabel="Teléfono"
+                    accessibilityLabel="Teléfono o correo electrónico"
                   />
                 </View>
               </View>
@@ -373,7 +348,7 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
                 style={s.forgotRow}
                 onPress={() => {
                   setRecoveryError('');
-                  setRecoveryStep(1);
+                  setRecoverySent(false);
                   setShowRecoveryModal(true);
                 }}
                 accessible
@@ -426,7 +401,6 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
               </TouchableOpacity>
             </Animated.View>
 
-            {/* Footer */}
             <Text style={[s.footer, { fontFamily: bodyFont }]}>
               © {new Date().getFullYear()} Yoss Beauty Salon · Seguridad y Cuidado
             </Text>
@@ -434,10 +408,13 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ─────────────────────────────────────────────────────────────────────
-          ── MODAL DE RECUPERACIÓN DE CONTRASEÑAS ────────────────────────────
-      ─────────────────────────────────────────────────────────────────────── */}
-      <Modal visible={showRecoveryModal} animationType="slide" transparent onRequestClose={() => setShowRecoveryModal(false)}>
+      {/* ── MODAL DE RECUPERACIÓN DE CONTRASEÑA ── */}
+      <Modal
+        visible={showRecoveryModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowRecoveryModal(false)}
+      >
         <View style={s.modalOverlay}>
           <View style={s.modalCard}>
             <View style={s.modalHeader}>
@@ -460,123 +437,39 @@ export default function LoginScreen({ onNavigateToRegister }: Props) {
               </View>
             )}
 
-            {/* PASO 1: Ingreso de teléfono registrado */}
-            {recoveryStep === 1 && (
-              <View style={s.stepContent}>
-                <Text style={s.stepDesc}>
-                  Ingresa tu número de teléfono registrado. Te enviaremos un código de seguridad para verificar tu identidad.
-                </Text>
-                <View style={s.field}>
-                  <Text style={[s.label, { fontFamily: semiBoldFont }]}>Teléfono Registrado</Text>
-                  <View style={s.inputRow}>
-                    <TextInput
-                      style={[s.input, { fontFamily: bodyFont }]}
-                      placeholder="10 dígitos (ej. 55 1234 5678)"
-                      placeholderTextColor={colors.beige[400]}
-                      keyboardType="phone-pad"
-                      value={recoveryPhone}
-                      onChangeText={setRecoveryPhone}
-                      maxLength={15}
-                    />
-                  </View>
+            <View style={s.stepContent}>
+              <Text style={s.stepDesc}>
+                Ingresa el correo electrónico con el que te registraste para enviarte un enlace seguro de restablecimiento. Si te registraste sin correo, solicita ayuda directamente con Yoss en el salón.
+              </Text>
+              <View style={s.field}>
+                <Text style={[s.label, { fontFamily: semiBoldFont }]}>Correo Electrónico</Text>
+                <View style={s.inputRow}>
+                  <TextInput
+                    style={[s.input, { fontFamily: bodyFont }]}
+                    placeholder="tu@correo.com"
+                    placeholderTextColor={colors.beige[400]}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={recoveryEmail}
+                    onChangeText={setRecoveryEmail}
+                  />
                 </View>
-                <TouchableOpacity
-                  style={s.btn}
-                  onPress={handleRequestRecoveryCode}
-                  activeOpacity={0.88}
-                >
-                  <Text style={[s.btnText, { fontFamily: semiBoldFont }]}>
-                    Enviar código de verificación →
-                  </Text>
-                </TouchableOpacity>
               </View>
-            )}
-
-            {/* PASO 2: Código de verificación */}
-            {recoveryStep === 2 && (
-              <View style={s.stepContent}>
-                <Text style={s.stepDesc}>
-                  Hemos generado tu código de seguridad para el teléfono {recoveryPhone}.
-                </Text>
-                <View style={s.codeSnippet}>
-                  <Text style={s.codeSnippetLabel}>Código de prueba:</Text>
-                  <Text style={s.codeSnippetValue}>8492</Text>
-                </View>
-                <View style={s.field}>
-                  <Text style={[s.label, { fontFamily: semiBoldFont }]}>Código recibido</Text>
-                  <View style={s.inputRow}>
-                    <TextInput
-                      style={[s.input, { fontFamily: bodyFont, textAlign: 'center', letterSpacing: 6, fontSize: 18 }]}
-                      placeholder="••••"
-                      placeholderTextColor={colors.beige[400]}
-                      keyboardType="number-pad"
-                      maxLength={6}
-                      value={recoveryCode}
-                      onChangeText={setRecoveryCode}
-                    />
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={s.btn}
-                  onPress={handleVerifyCode}
-                  activeOpacity={0.88}
-                >
+              <TouchableOpacity
+                style={[s.btn, recoveryLoading && s.btnDisabled]}
+                onPress={handleSendResetEmail}
+                disabled={recoveryLoading}
+                activeOpacity={0.88}
+              >
+                {recoveryLoading ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
                   <Text style={[s.btnText, { fontFamily: semiBoldFont }]}>
-                    Verificar código ✓
+                    {recoverySent ? '✓ Enlace enviado' : 'Enviar enlace de recuperación →'}
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setRecoveryStep(1)}
-                  style={{ alignSelf: 'center', marginTop: 10 }}
-                >
-                  <Text style={s.forgotText}>Cambiar teléfono</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* PASO 3: Nueva contraseña */}
-            {recoveryStep === 3 && (
-              <View style={s.stepContent}>
-                <Text style={s.stepDesc}>
-                  Crea una nueva contraseña segura para tu cuenta.
-                </Text>
-                <View style={s.field}>
-                  <Text style={[s.label, { fontFamily: semiBoldFont }]}>Nueva Contraseña</Text>
-                  <View style={s.inputRow}>
-                    <TextInput
-                      style={[s.input, { fontFamily: bodyFont }]}
-                      placeholder="Mínimo 6 caracteres"
-                      placeholderTextColor={colors.beige[400]}
-                      secureTextEntry
-                      value={newPassword}
-                      onChangeText={setNewPassword}
-                    />
-                  </View>
-                </View>
-                <View style={s.field}>
-                  <Text style={[s.label, { fontFamily: semiBoldFont }]}>Confirmar Nueva Contraseña</Text>
-                  <View style={s.inputRow}>
-                    <TextInput
-                      style={[s.input, { fontFamily: bodyFont }]}
-                      placeholder="Repite tu contraseña"
-                      placeholderTextColor={colors.beige[400]}
-                      secureTextEntry
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                    />
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={s.btn}
-                  onPress={handleSetNewPassword}
-                  activeOpacity={0.88}
-                >
-                  <Text style={[s.btnText, { fontFamily: semiBoldFont }]}>
-                    {recoverySuccess ? '¡Guardado con éxito! ✓' : 'Actualizar contraseña'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -612,8 +505,6 @@ const s = StyleSheet.create({
     maxWidth: 460,
     alignSelf: 'center',
   },
-
-  // ── Branding centrado ─────────────────────────
   brand: {
     width: '100%',
     alignItems: 'center',
@@ -654,8 +545,6 @@ const s = StyleSheet.create({
     textAlign: 'center',
     alignSelf: 'center',
   },
-
-  // Formulario
   form: {
     backgroundColor: colors.white,
     borderRadius: borderRadius.card,
@@ -678,7 +567,6 @@ const s = StyleSheet.create({
     lineHeight: 18,
     textAlign: 'center',
   },
-
   successBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -690,7 +578,6 @@ const s = StyleSheet.create({
   },
   successIcon: { fontSize: 16, color: colors.status.success, fontWeight: '700' },
   successText: { flex: 1, fontSize: 12, color: colors.status.success, lineHeight: 17 },
-
   errorBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -713,7 +600,6 @@ const s = StyleSheet.create({
     color: colors.status.error,
     lineHeight: 17,
   },
-
   field: { marginBottom: spacing.md },
   label: {
     fontSize: 11,
@@ -743,7 +629,6 @@ const s = StyleSheet.create({
     color: colors.ink[800],
     padding: 0,
   },
-
   forgotRow: {
     alignSelf: 'flex-end',
     paddingVertical: 4,
@@ -755,7 +640,6 @@ const s = StyleSheet.create({
     color: colors.primary[500],
     fontWeight: '600',
   },
-
   btn: {
     backgroundColor: colors.primary[500],
     borderRadius: borderRadius.button,
@@ -772,7 +656,6 @@ const s = StyleSheet.create({
     letterSpacing: 0.4,
     fontWeight: '700',
   },
-
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -781,7 +664,6 @@ const s = StyleSheet.create({
   },
   divLine: { flex: 1, height: 1, backgroundColor: colors.beige[200] },
   divText: { fontSize: 13, color: colors.beige[400] },
-
   outlineBtn: {
     borderWidth: 1.5,
     borderColor: colors.primary[500],
@@ -795,18 +677,15 @@ const s = StyleSheet.create({
     color: colors.primary[600],
     letterSpacing: 0.3,
   },
-
   footer: {
     textAlign: 'center',
     color: colors.beige[400],
     fontSize: 11,
     marginTop: spacing.xl,
   },
-
-  // Modal de recuperación
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -815,17 +694,17 @@ const s = StyleSheet.create({
     width: '100%',
     maxWidth: 420,
     backgroundColor: colors.white,
-    borderRadius: 22,
-    padding: 22,
-    gap: 14,
+    borderRadius: borderRadius.card,
+    padding: spacing.lg,
     ...shadow.elevated,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 14,
   },
-  modalTitle: { fontSize: 22, fontWeight: '700', color: colors.ink[800] },
+  modalTitle: { fontSize: 22, color: colors.ink[800] },
   modalClose: {
     width: 30,
     height: 30,
@@ -834,19 +713,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalCloseText: { fontSize: 14, color: colors.ink[700], fontWeight: '700' },
-  stepContent: { gap: 12 },
-  stepDesc: { fontSize: 13, color: colors.ink[700], lineHeight: 18 },
-  codeSnippet: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.primary[50],
-    borderWidth: 1,
-    borderColor: colors.primary[200],
-    padding: 10,
-    borderRadius: 10,
-  },
-  codeSnippetLabel: { fontSize: 11, color: colors.primary[700], fontWeight: '600' },
-  codeSnippetValue: { fontSize: 16, color: colors.primary[700], fontWeight: '800', letterSpacing: 2 },
+  modalCloseText: { fontSize: 13, color: colors.ink[700], fontWeight: '700' },
+  stepContent: { gap: 10 },
+  stepDesc: { fontSize: 13, color: colors.ink[700], lineHeight: 19, marginBottom: 6 },
 });

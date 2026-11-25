@@ -1,33 +1,16 @@
 import React, { useState } from 'react';
 import { ScrollView, Text, View, StyleSheet, TouchableOpacity, TextInput, Switch } from 'react-native';
 import { PageHeader, SectionTitle, pageStyles as p } from '@/components/SalonUI';
+import { useSalon, RewardItem } from '@/context/SalonContext';
 import { theme } from '@/constants/YossTheme';
 
 const { colors } = theme;
 
 type RewardType = 'visitas' | 'gasto';
-type Reward = {
-  id: string;
-  icon: string;
-  title: string;
-  description: string;
-  type: RewardType;
-  goal: number;
-  active: boolean;
-};
-
-const initialRewards: Reward[] = [
-  { id: 'r1', icon: '✂️', title: 'Corte de cabello gratis', description: 'Un corte profesional sin costo para la cliente.', type: 'visitas', goal: 10, active: true },
-  { id: 'r2', icon: '🧴', title: 'Producto a elegir', description: 'Un producto del catálogo a elección de la cliente.', type: 'gasto', goal: 2000, active: true },
-  { id: 'r3', icon: '✨', title: 'Tratamiento capilar gratis', description: 'Sesión de hidratación profunda o keratina sin costo.', type: 'gasto', goal: 3500, active: true },
-  { id: 'r4', icon: '💅', title: 'Diseño de cejas gratis', description: 'Retoque completo de cejas sin cargo.', type: 'visitas', goal: 5, active: true },
-  { id: 'r5', icon: '🎁', title: 'Kit de productos premium', description: 'Set de cuidado capilar especial de la estética.', type: 'gasto', goal: 6000, active: false },
-];
-
 const ICONS = ['✂️', '🧴', '✨', '💅', '🎁', '🌿', '💆', '🎀', '💄', '🫧'];
 
 export default function RecompensasAdminScreen() {
-  const [rewards, setRewards] = useState<Reward[]>(initialRewards);
+  const { rewards, saveRewardCatalog, toggleRewardActive, deleteRewardCatalog } = useSalon();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -44,36 +27,33 @@ export default function RecompensasAdminScreen() {
   };
 
   const openNew = () => { resetForm(); setShowForm(true); };
-  const openEdit = (reward: Reward) => {
+  const openEdit = (reward: RewardItem) => {
     setFormTitle(reward.title); setFormDesc(reward.description);
     setFormType(reward.type); setFormGoal(String(reward.goal));
     setFormIcon(reward.icon); setEditingId(reward.id);
     setShowForm(true);
   };
 
-  const saveReward = () => {
+  const saveReward = async () => {
     if (!formTitle.trim() || !formGoal.trim()) return;
     const goal = parseInt(formGoal.replace(/\D/g, ''), 10) || 1;
-    if (editingId) {
-      setRewards(rewards.map(r => r.id === editingId
-        ? { ...r, title: formTitle.trim(), description: formDesc.trim(), type: formType, goal, icon: formIcon }
-        : r));
-    } else {
-      const newReward: Reward = {
-        id: `r${Date.now()}`, icon: formIcon,
-        title: formTitle.trim(), description: formDesc.trim(),
-        type: formType, goal, active: true,
-      };
-      setRewards([newReward, ...rewards]);
-    }
-    resetForm(); setShowForm(false);
+    await saveRewardCatalog({
+      id: editingId || undefined,
+      icon: formIcon,
+      title: formTitle.trim(),
+      description: formDesc.trim(),
+      type: formType,
+      goal,
+    });
+    resetForm();
+    setShowForm(false);
   };
 
-  const toggleActive = (id: string) =>
-    setRewards(rewards.map(r => r.id === id ? { ...r, active: !r.active } : r));
+  const toggleActive = (id: string, currentActive: boolean) =>
+    toggleRewardActive(id, !currentActive);
 
   const deleteReward = (id: string) =>
-    setRewards(rewards.filter(r => r.id !== id));
+    deleteRewardCatalog(id);
 
   return (
     <ScrollView style={p.page} contentContainerStyle={p.scroll} showsVerticalScrollIndicator={false}>
@@ -218,7 +198,7 @@ export default function RecompensasAdminScreen() {
           <View style={s.rewardActions}>
             <Switch
               value={reward.active}
-              onValueChange={() => toggleActive(reward.id)}
+              onValueChange={() => toggleActive(reward.id, reward.active)}
               trackColor={{ false: colors.beige[200], true: colors.primary[200] }}
               thumbColor={reward.active ? colors.primary[500] : colors.beige[400]}
               style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
@@ -241,7 +221,7 @@ export default function RecompensasAdminScreen() {
         </View>
       )}
 
-      <Text style={s.note}>Los cambios se aplicarán cuando conectes la base de datos.</Text>
+      <Text style={s.note}>Los cambios se guardan y sincronizan en tiempo real con Supabase.</Text>
     </ScrollView>
   );
 }

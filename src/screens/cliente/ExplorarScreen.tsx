@@ -21,55 +21,34 @@ interface Props {
   onNavigateToAgendar?: (params?: { fecha?: string; servicioId?: string; isRecompensa?: boolean; recompensaNombre?: string }) => void;
 }
 
-const PRODUCTS = [
-  {
-    id: 'p1',
-    brand: "L'ORÉAL PROFESSIONNEL",
-    name: 'Acondicionador Vitamino Color',
-    detail: 'Protección para cabello teñido',
-    price: '$520',
-    image: 'https://www.sephora.com/productimages/sku/s2717411-main-zoom.jpg',
-    color: '#F5E8DD',
-  },
-  {
-    id: 'p2',
-    brand: 'WELLA PROFESSIONALS',
-    name: 'Color Fresh Mask',
-    detail: 'Mascarilla con color temporal',
-    price: '$690',
-    image: 'https://wella.bynder.com/m/cdb6a5785d08b9f5/original/Wella_Professionals_Color_Fresh_Mask_Copper_Glow_150ml_PI_1.png',
-    color: '#E9E5F1',
-  },
-  {
-    id: 'p3',
-    brand: 'OLAPLEX',
-    name: 'No.5 Bond Maintenance',
-    detail: 'Acondicionador reparador',
-    price: '$780',
-    image: 'https://olaplex.com/cdn/shop/articles/Large_JPG-TEXTURE_N5_WHITE_BG_W_PRODUCT_3000x3000_0faafb22-1f16-42ff-b774-7361fdaa005f.jpg?v=1706268308&width=1200',
-    color: '#F0EEDC',
-  },
-];
-
-const SERVICES = [
-  { id: 'srv-001', icon: '✂️', name: 'Corte y peinado', time: '60 min', price: 'Desde $450', subtitle: 'Técnica personalizada y secado' },
-  { id: 'srv-003', icon: '🎨', name: 'Coloración & Balayage', time: '120–180 min', price: 'Desde $1,200', subtitle: 'Tonos a medida sin maltratar' },
-  { id: 'srv-006', icon: '🫧', name: 'Tratamiento capilar', time: '75 min', price: 'Desde $650', subtitle: 'Hidratación profunda y brillo' },
-];
+const PRODUCT_TINTS = ['#F5E8DD', '#E9E5F1', '#F0EEDC', '#F1E6EC'];
 
 export default function ExplorarScreen({ onNavigateTab, onNavigateToAgendar }: Props) {
-  const { appointments, toggleFavProduct, isFavProduct, clientProfile } = useSalon();
+  const { appointments, servicesCatalog, productsCatalog, toggleFavProduct, isFavProduct, clientProfile } = useSalon();
+
+  const activeServices = servicesCatalog.filter(s => s.active).slice(0, 3);
+  const activeProducts = productsCatalog.filter(prod => prod.active);
 
   // Citas próximas del cliente
   const upcomingAppointments = appointments.filter(
-    a => a.client === clientProfile.name && (a.status === 'Aceptada' || a.status === 'En proceso')
+    a => a.status === 'Aceptada' || a.status === 'En proceso' || a.status === 'Pendiente anticipo'
   ).slice(0, 2);
+
+  const firstName = (clientProfile.name || 'Bienvenida').split(' ')[0];
+  const initials = (clientProfile.name || 'YB')
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .map(w => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'YB';
 
   return (
     <ScrollView style={p.page} contentContainerStyle={p.scroll} showsVerticalScrollIndicator={false}>
       <PageHeader
         eyebrow="Yoss Beauty Salon"
-        title={`Hola, ${clientProfile.name.split(' ')[0]} ✨`}
+        title={`Hola, ${firstName} ✨`}
         subtitle="Tu semana de belleza y cuidado, en un solo lugar."
         rightElement={
           <TouchableOpacity
@@ -86,9 +65,7 @@ export default function ExplorarScreen({ onNavigateTab, onNavigateToAgendar }: P
               />
             ) : (
               <View style={styles.headerAvatarFallback}>
-                <Text style={styles.headerAvatarInitials}>
-                  {clientProfile.name.trim().split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-                </Text>
+                <Text style={styles.headerAvatarInitials}>{initials}</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -115,24 +92,30 @@ export default function ExplorarScreen({ onNavigateTab, onNavigateToAgendar }: P
           </Text>
           <Text style={styles.weekStat}>
             <Text style={styles.statNumber}>
-              {upcomingAppointments.filter(a => a.status === 'En proceso').length}
-            </Text> por confirmar
+              {upcomingAppointments.filter(a => a.status === 'En proceso' || a.status === 'Pendiente anticipo').length}
+            </Text> pendientes
           </Text>
         </View>
 
-        {upcomingAppointments.map((item, idx) => (
-          <View key={`${item.id}-${idx}`} style={styles.appointmentRow}>
-            <View style={styles.dateBox}>
-              <Text style={styles.dateDay}>{item.date.split(',')[0] || 'CITA'}</Text>
-              <Text style={styles.dateNum}>{item.date.split(' ')[1] || '•'}</Text>
+        {upcomingAppointments.length === 0 ? (
+          <Text style={[p.muted, { color: '#D2D2C8' }]}>
+            Aún no tienes citas próximas. ¡Agenda tu primera visita!
+          </Text>
+        ) : (
+          upcomingAppointments.map((item, idx) => (
+            <View key={`${item.id}-${idx}`} style={styles.appointmentRow}>
+              <View style={styles.dateBox}>
+                <Text style={styles.dateDay}>{item.date.split(',')[0] || 'CITA'}</Text>
+                <Text style={styles.dateNum}>{item.date.split(' ')[1] || '•'}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.appointmentName}>{item.service}</Text>
+                <Text style={p.muted}>{item.time} · Yoss Beauty Salon</Text>
+              </View>
+              <StatusPill label={item.status} tone={item.tone} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.appointmentName}>{item.service}</Text>
-              <Text style={p.muted}>{item.time} · Yoss Beauty Salon</Text>
-            </View>
-            <StatusPill label={item.status} tone={item.tone} />
-          </View>
-        ))}
+          ))
+        )}
 
         <View style={styles.cardActionFooter}>
           <Text style={styles.cardActionText}>Ver agenda completa →</Text>
@@ -147,7 +130,7 @@ export default function ExplorarScreen({ onNavigateTab, onNavigateToAgendar }: P
           onActionPress={() => onNavigateTab?.('servicios')}
         />
         <View style={styles.serviceList}>
-          {SERVICES.map(service => (
+          {activeServices.map(service => (
             <TouchableOpacity
               key={service.id}
               style={[p.card, styles.serviceCard]}
@@ -156,9 +139,11 @@ export default function ExplorarScreen({ onNavigateTab, onNavigateToAgendar }: P
             >
               <Text style={styles.serviceIcon}>{service.icon}</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.serviceNameTitle}>{service.name}</Text>
-                <Text style={styles.serviceSubtext}>{service.subtitle}</Text>
-                <Text style={styles.servicePriceBadge}>{service.time} · {service.price}</Text>
+                <Text style={styles.serviceNameTitle}>{service.nombre}</Text>
+                <Text style={styles.serviceSubtext} numberOfLines={1}>{service.descripcion}</Text>
+                <Text style={styles.servicePriceBadge}>
+                  {service.duracion} · {service.requiresDeposit ? `Anticipo $${service.depositAmount}` : 'Cotización en salón'}
+                </Text>
               </View>
               <View style={styles.agendarChip}>
                 <Text style={styles.agendarChipText}>Agendar ›</Text>
@@ -179,18 +164,23 @@ export default function ExplorarScreen({ onNavigateTab, onNavigateToAgendar }: P
           Cuidado profesional recomendado para tu tipo de cabello.
         </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productRail}>
-          {PRODUCTS.map(product => {
+          {activeProducts.map((product, idx) => {
             const isFav = isFavProduct(product.id);
+            const tint = PRODUCT_TINTS[idx % PRODUCT_TINTS.length];
             return (
               <View key={product.id} style={styles.productCard}>
-                <View style={[styles.productArt, { backgroundColor: product.color }]}>
-                  <Image
-                    source={{ uri: product.image }}
-                    style={styles.productPhoto}
-                    contentFit="contain"
-                    transition={180}
-                    accessibilityLabel={`Imagen de ${product.name}`}
-                  />
+                <View style={[styles.productArt, { backgroundColor: tint }]}>
+                  {product.image ? (
+                    <Image
+                      source={{ uri: product.image }}
+                      style={styles.productPhoto}
+                      contentFit="contain"
+                      transition={180}
+                      accessibilityLabel={`Imagen de ${product.name}`}
+                    />
+                  ) : (
+                    <Text style={{ fontSize: 32 }}>🧴</Text>
+                  )}
                   <TouchableOpacity
                     style={[styles.heart, isFav && styles.heartActive]}
                     onPress={() => toggleFavProduct(product.id)}
@@ -202,14 +192,14 @@ export default function ExplorarScreen({ onNavigateTab, onNavigateToAgendar }: P
                   </TouchableOpacity>
                 </View>
 
-                <Text style={styles.brand}>{product.brand}</Text>
+                <Text style={styles.brand}>{product.brand.toUpperCase()}</Text>
                 <Text style={styles.productName} numberOfLines={2}>
                   {product.name}
                 </Text>
                 <Text style={styles.productDetail} numberOfLines={1}>
-                  {product.detail}
+                  {product.stock ? 'Disponible en salón' : 'Agotado temporalmente'}
                 </Text>
-                <Text style={styles.price}>{product.price}</Text>
+                <Text style={styles.price}>{product.priceFormatted}</Text>
               </View>
             );
           })}

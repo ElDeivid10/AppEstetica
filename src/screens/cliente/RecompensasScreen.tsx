@@ -86,9 +86,10 @@ export default function RecompensasScreen({ onNavigateToAgendar }: Props) {
   const [modalMode, setModalMode] = useState<'service' | 'product' | null>(null);
   const [couponCode, setCouponCode] = useState<string | null>(null);
 
+  const activeRewards = rewards.filter(r => r.active);
   const filtered = activeFilter === 'todas'
-    ? rewards
-    : rewards.filter(r => r.type === activeFilter);
+    ? activeRewards
+    : activeRewards.filter(r => r.type === activeFilter);
 
   const handleOpenClaim = (reward: RewardItem) => {
     setSelectedReward(reward);
@@ -168,18 +169,25 @@ export default function RecompensasScreen({ onNavigateToAgendar }: Props) {
       </View>
 
       {/* ── Progreso de Nivel ── */}
-      <View style={s.levelProgressCard}>
-        <View style={s.levelProgressHeader}>
-          <Text style={s.levelProgressLabel}>Progreso hacia nivel {clientProfile.nextLevel}</Text>
-          <Text style={s.levelProgressPct}>
-            {Math.round((clientProfile.totalSpent / clientProfile.nextLevelAt) * 100)}%
-          </Text>
-        </View>
-        <ProgressBar progress={clientProfile.totalSpent / clientProfile.nextLevelAt} />
-        <Text style={s.levelProgressSub}>
-          Te faltan ${(clientProfile.nextLevelAt - clientProfile.totalSpent).toLocaleString()} MXN para alcanzar nivel {clientProfile.nextLevel}
-        </Text>
-      </View>
+      {(() => {
+        const nextAt = clientProfile.nextLevelAt > 0 ? clientProfile.nextLevelAt : 2000;
+        const pctLevel = Math.min(100, Math.round((clientProfile.totalSpent / nextAt) * 100));
+        const missing = Math.max(0, nextAt - clientProfile.totalSpent);
+        return (
+          <View style={s.levelProgressCard}>
+            <View style={s.levelProgressHeader}>
+              <Text style={s.levelProgressLabel}>Progreso hacia nivel {clientProfile.nextLevel}</Text>
+              <Text style={s.levelProgressPct}>{pctLevel}%</Text>
+            </View>
+            <ProgressBar progress={clientProfile.totalSpent / nextAt} />
+            <Text style={s.levelProgressSub}>
+              {missing > 0
+                ? `Te faltan $${missing.toLocaleString()} MXN para alcanzar nivel ${clientProfile.nextLevel}`
+                : `¡Ya alcanzaste el nivel ${clientProfile.nextLevel}!`}
+            </Text>
+          </View>
+        );
+      })()}
 
       {/* ── Filtros ── */}
       <View style={s.filterRow}>

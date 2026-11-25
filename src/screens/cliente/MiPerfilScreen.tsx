@@ -7,7 +7,7 @@
  * - Resumen del Club de Recompensas.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   Text,
@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { PageHeader, SectionTitle, pageStyles as p } from '@/components/SalonUI';
 import { useAuth } from '@/context/AuthContext';
 import { useSalon, AVATAR_PRESETS, AvatarPreset } from '@/context/SalonContext';
@@ -29,23 +30,7 @@ import ChatClienteModal from '@/screens/cliente/ChatClienteModal';
 import { theme } from '@/constants/YossTheme';
 
 const { colors, borderRadius, shadow, spacing } = theme;
-
-// Catálogo base para mapear favoritos guardados
-const ALL_SERVICES = [
-  { id: 'srv-001', icon: '✂', name: 'Cortes de Cabello', duration: '20–45 MIN' },
-  { id: 'srv-002', icon: '◯', name: 'Perfilado de Barba', duration: '15–20 MIN' },
-  { id: 'srv-003', icon: '✦', name: 'Colorimetría', duration: '2–8 HORAS' },
-  { id: 'srv-004', icon: '★', name: 'Maquillaje y Peinado', duration: '45–90 MIN' },
-  { id: 'srv-005', icon: '✿', name: 'Depilaciones', duration: '15–45 MIN' },
-  { id: 'srv-006', icon: '♡', name: 'Alaciados Progresivos', duration: '3–5 HORAS' },
-];
-
-const ALL_PRODUCTS = [
-  { id: 'p1', brand: "L'ORÉAL", name: 'Acondicionador Vitamino Color', tint: '#F5E8DD', image: 'https://www.sephora.com/productimages/sku/s2717411-main-zoom.jpg' },
-  { id: 'p2', brand: 'WELLA', name: 'Color Fresh Mask', tint: '#E9E5F1', image: 'https://wella.bynder.com/m/cdb6a5785d08b9f5/original/Wella_Professionals_Color_Fresh_Mask_Copper_Glow_150ml_PI_1.png' },
-  { id: 'p3', brand: 'OLAPLEX', name: 'No.5 Bond Maintenance', tint: '#F0EEDC', image: 'https://olaplex.com/cdn/shop/articles/Large_JPG-TEXTURE_N5_WHITE_BG_W_PRODUCT_3000x3000_0faafb22-1f16-42ff-b774-7361fdaa005f.jpg?v=1706268308&width=1200' },
-  { id: 'p4', brand: 'KERASTASE', name: 'Chroma Absolu Fondant', tint: '#F1E6EC', image: 'https://www.kerastase.com.br/dw/image/v2/AAFM_PRD/on/demandware.static/-/Sites-kerastase-master-catalog/pt_BR/dw831df1bc/images/KRBR00119/condicionador-kerastase-%20chroma-absolu-fondant-cica-chroma.jpg' },
-];
+const TINTS = ['#F5E8DD', '#E9E5F1', '#F0EEDC', '#F1E6EC'];
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
@@ -60,11 +45,15 @@ export default function MiPerfilScreen() {
   const { logout } = useAuth();
   const {
     clientProfile,
+    servicesCatalog,
+    productsCatalog,
     updateClientProfile,
     updateAvatar,
     removeAvatar,
     favServices,
     favProducts,
+    toggleFavService,
+    toggleFavProduct,
     unreadClientCount,
   } = useSalon();
 
@@ -81,8 +70,14 @@ export default function MiPerfilScreen() {
   const [allergies, setAllergies] = useState(clientProfile.allergies);
   const [favModalTab, setFavModalTab] = useState<'servicios' | 'productos'>('servicios');
 
-  const save = () => {
-    updateClientProfile({ name, phone, allergies });
+  useEffect(() => {
+    setName(clientProfile.name);
+    setPhone(clientProfile.phone);
+    setAllergies(clientProfile.allergies);
+  }, [clientProfile.name, clientProfile.phone, clientProfile.allergies]);
+
+  const save = async () => {
+    await updateClientProfile({ name, phone, allergies });
     setEditing(false);
     setSaved(true);
   };
@@ -101,10 +96,12 @@ export default function MiPerfilScreen() {
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.85,
+        quality: 0.45,
+        base64: true,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        updateAvatar(result.assets[0].uri);
+        const asset = result.assets[0];
+        await updateAvatar(asset.uri, undefined, asset.base64 ?? undefined);
         setShowAvatarModal(false);
       }
     } catch {
@@ -129,10 +126,12 @@ export default function MiPerfilScreen() {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.85,
+        quality: 0.45,
+        base64: true,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        updateAvatar(result.assets[0].uri);
+        const asset = result.assets[0];
+        await updateAvatar(asset.uri, undefined, asset.base64 ?? undefined);
         setShowAvatarModal(false);
       }
     } catch {
@@ -142,27 +141,45 @@ export default function MiPerfilScreen() {
     }
   };
 
-  const handleSelectPreset = (preset: AvatarPreset) => {
-    updateAvatar(preset.uri, preset.id);
+  const handleSelectPreset = async (preset: AvatarPreset) => {
     setShowAvatarModal(false);
+    await updateAvatar(preset.uri, preset.id);
   };
 
-  const handleResetToInitials = () => {
-    removeAvatar();
+  const handleResetToInitials = async () => {
     setShowAvatarModal(false);
+    await removeAvatar();
   };
 
-  const initials = clientProfile.name
+  const initials = (clientProfile.name || 'YB')
     .trim()
     .split(' ')
+    .filter(Boolean)
     .map(w => w[0])
     .join('')
     .slice(0, 2)
-    .toUpperCase();
+    .toUpperCase() || 'YB';
 
-  // Filtrar los favoritos reales
-  const myFavServices = ALL_SERVICES.filter(s => favServices.has(s.id));
-  const myFavProducts = ALL_PRODUCTS.filter(p => favProducts.has(p.id));
+  const memberSinceLabel = (() => {
+    if (!clientProfile.createdAt) return 'Miembro Club Yoss';
+    const dt = new Date(clientProfile.createdAt);
+    if (Number.isNaN(dt.getTime())) return 'Miembro Club Yoss';
+    return `Clienta desde ${dt.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })}`;
+  })();
+
+  // Filtrar los favoritos reales desde los catálogos de Supabase
+  const myFavServices = servicesCatalog
+    .filter(srv => favServices.has(srv.id))
+    .map(srv => ({ id: srv.id, icon: srv.icon, name: srv.nombre, duration: srv.duracion }));
+  const myFavProducts = productsCatalog
+    .filter(prod => favProducts.has(prod.id))
+    .map((prod, idx) => ({
+      id: prod.id,
+      brand: prod.brand,
+      name: prod.name,
+      tint: TINTS[idx % TINTS.length],
+      image: prod.image,
+    }));
 
   return (
     <ScrollView style={p.page} contentContainerStyle={p.scroll} showsVerticalScrollIndicator={false}>
@@ -201,7 +218,7 @@ export default function MiPerfilScreen() {
           <TouchableOpacity onPress={() => setShowAvatarModal(true)} activeOpacity={0.7}>
             <Text style={s.changePhotoText}>Cambiar foto de perfil</Text>
           </TouchableOpacity>
-          <Text style={p.muted}>Clienta desde octubre 2025</Text>
+          <Text style={p.muted}>{memberSinceLabel}</Text>
         </View>
 
         <TouchableOpacity
@@ -345,7 +362,7 @@ export default function MiPerfilScreen() {
 
       {/* ── Modal de Favoritos Completo ── */}
       <Modal visible={showFavModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowFavModal(false)}>
-        <View style={s.modalRoot}>
+        <SafeAreaView style={s.modalRoot} edges={['top', 'bottom']}>
           <View style={s.modalHeader}>
             <Text style={s.modalHeaderTitle}>Mis Favoritos</Text>
             <TouchableOpacity onPress={() => setShowFavModal(false)} style={s.modalCloseBtn}>
@@ -382,7 +399,9 @@ export default function MiPerfilScreen() {
                     <Text style={s.serviceName}>{item.name}</Text>
                     <Text style={s.serviceDuration}>{item.duration}</Text>
                   </View>
-                  <Text style={s.favHeart}>♥</Text>
+                  <TouchableOpacity onPress={() => toggleFavService(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={s.favHeart}>♥</Text>
+                  </TouchableOpacity>
                 </View>
               )}
             />
@@ -400,12 +419,17 @@ export default function MiPerfilScreen() {
                     <Image source={{ uri: item.image }} style={s.productPhoto} contentFit="contain" transition={180} />
                   </View>
                   <Text style={s.productBrand}>{item.brand}</Text>
-                  <Text style={s.productName}>{item.name}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                    <Text style={[s.productName, { flex: 1 }]}>{item.name}</Text>
+                    <TouchableOpacity onPress={() => toggleFavProduct(item.id)}>
+                      <Text style={s.favHeart}>♥</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
             />
           )}
-        </View>
+        </SafeAreaView>
       </Modal>
 
       {/* ── Modal de Chat & Mensajes ── */}
@@ -418,7 +442,7 @@ export default function MiPerfilScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowAvatarModal(false)}
       >
-        <View style={s.modalRoot}>
+        <SafeAreaView style={s.modalRoot} edges={['top', 'bottom']}>
           <View style={s.modalHeader}>
             <View>
               <Text style={s.modalHeaderTitle}>Foto de perfil</Text>
@@ -565,7 +589,7 @@ export default function MiPerfilScreen() {
               </View>
             )}
           </ScrollView>
-        </View>
+        </SafeAreaView>
       </Modal>
 
       {/* ── Resumen Club Recompensas ── */}

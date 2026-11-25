@@ -11,7 +11,7 @@
  * 3. Aviso de la regla de penalización por cancelaciones.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ScrollView,
   Text,
@@ -20,8 +20,9 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { PageHeader, SectionTitle, StatusPill, pageStyles as p } from '@/components/SalonUI';
-import { useSalon } from '@/context/SalonContext';
+import { useSalon, AppointmentItem, OccupiedSlot, SalonDaySchedule, DEFAULT_SALON_HOURS } from '@/context/SalonContext';
 import { theme } from '@/constants/YossTheme';
+import MercadoPagoModal from '@/components/MercadoPagoModal';
 
 const { colors, borderRadius, shadow, spacing } = theme;
 
@@ -69,61 +70,80 @@ const MESES_LARGOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Ju
 
 /**
  * Genera los próximos 4 días laborables del salón (excluyendo domingos)
- * con datos simulados de saturación de citas (DB-ready).
+ * con cálculo real de saturación basado exclusivamente en las citas ocupadas en Supabase.
  */
-function generar4DiasProximos(): DiaSaturacion[] {
+function generar4DiasProximos(
+  occupiedSlots: OccupiedSlot[],
+  salonHours: SalonDaySchedule[] = DEFAULT_SALON_HOURS
+): DiaSaturacion[] {
   const result: DiaSaturacion[] = [];
   const hoy = new Date();
   const d = new Date(hoy);
-
-  // Mocks de saturación predefinidos para dar dinamismo
-  const saturacionesMock = [
-    { sat: 30, ocupadas: 3, total: 10, nivel: 'baja' as NivelSaturacion },
-    { sat: 60, ocupadas: 6, total: 10, nivel: 'media' as NivelSaturacion },
-    { sat: 40, ocupadas: 4, total: 10, nivel: 'baja' as NivelSaturacion },
-    { sat: 85, ocupadas: 8, total: 10, nivel: 'alta' as NivelSaturacion },
-  ];
+  const nowMs = Date.now();
 
   while (result.length < 4) {
     d.setDate(d.getDate() + 1);
     const dow = d.getDay();
-    if (dow !== 0) { // El salón no atiende domingos
-      const idx = result.length;
-      const config = saturacionesMock[idx];
+    const schedule =
+      salonHours.find((h) => h.diaSemana === dow) ||
+      DEFAULT_SALON_HOURS.find((h) => h.diaSemana === dow);
+
+    if (schedule && !schedule.esCerrado) { // El salón no atiende domingos ni días cerrados
       const yyyy = d.getFullYear();
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const dd = String(d.getDate()).padStart(2, '0');
+      const iso = `${yyyy}-${mm}-${dd}`;
 
+      // Capacidad total según horario oficial: Sáb = 420m (7h), Lun-Vie = 360m (6h)
+      const totalCapacidadMin = dow === 6 ? 420 : 360;
+
+      // Calcular minutos reales de citas activas en esta fecha
+      const citasDelDia = occupiedSlots.filter(a => {
+        if (a.isoDate !== iso) return false;
+        if (a.status === 'No asistió' || a.status === 'Expirada' || a.status === 'Cancelada') return false;
+        if (a.status === 'Pendiente anticipo' && a.expiresAt && nowMs > a.expiresAt) return false;
+        return true;
+      });
+      const minutosDeCitas = citasDelDia.reduce((acc, c) => acc + (c.durationMin || 30), 0);
+
+      const totalOcupado = Math.min(totalCapacidadMin, minutosDeCitas);
+      const sat = Math.min(100, Math.round((totalOcupado / totalCapacidadMin) * 100));
+      const ocupadas = citasDelDia.length;
+      const totalCitas = Math.round(totalCapacidadMin / 45);
+
+      let nivel: NivelSaturacion = 'baja';
       let color = '#2E7D32';
       let bg = '#E8F5E9';
       let border = '#A5D6A7';
       let label = 'Disponibilidad alta';
-      let descripcion = 'Excelente día para agendar; muchos turnos disponibles.';
+      let descripcion = 'Excelente día para agendar; turnos matutinos y vespertinos disponibles.';
 
-      if (config.nivel === 'media') {
-        color = '#B45309';
-        bg = '#FFFBEB';
-        border = '#FDE68A';
-        label = 'Disponibilidad media';
-        descripcion = 'Turnos moderados; te sugerimos agendar con tiempo.';
-      } else if (config.nivel === 'alta') {
+      if (sat >= 75) {
+        nivel = 'alta';
         color = '#C62828';
         bg = '#FFEBEE';
         border = '#FFCDD2';
-        label = 'Casi lleno';
-        descripcion = 'Alta demanda; quedan muy pocos horarios libres.';
+        label = 'Casi lleno (Alta saturación)';
+        descripcion = 'Queda muy poco tiempo libre. Solo servicios breves (cortes o perfilado) son posibles.';
+      } else if (sat >= 45) {
+        nivel = 'media';
+        color = '#B45309';
+        bg = '#FFFBEB';
+        border = '#FDE68A';
+        label = 'Disponibilidad moderada';
+        descripcion = 'Turnos moderados; te sugerimos agendar con anticipación para asegurar tu espacio.';
       }
 
       result.push({
-        iso: `${yyyy}-${mm}-${dd}`,
+        iso,
         dayName: DIAS_ES[dow],
         dayNum: d.getDate(),
         month: MESES_CORTOS[d.getMonth()],
         monthFull: MESES_LARGOS[d.getMonth()],
-        saturacion: config.sat,
-        nivel: config.nivel,
-        citasOcupadas: config.ocupadas,
-        totalCitas: config.total,
+        saturacion: sat,
+        nivel,
+        citasOcupadas: ocupadas,
+        totalCitas,
         color,
         bg,
         border,
@@ -137,47 +157,31 @@ function generar4DiasProximos(): DiaSaturacion[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  HISTORIAL MOCK
-// ─────────────────────────────────────────────────────────────────────────────
-const HISTORIAL_MOCK: Appointment[] = [
-  {
-    service: 'Retoque de raíz',
-    date: 'Mié, 22 oct',
-    time: '11:00',
-    status: 'Aceptada',
-    tone: 'olive',
-    detail: 'Confirmada por Yoss Beauty Salon',
-  },
-  {
-    service: 'Tratamiento hidratante',
-    date: 'Vie, 17 oct',
-    time: '16:00',
-    status: 'Finalizada',
-    tone: 'gray',
-    detail: 'Atendida por Yoss — hace 4 días',
-  },
-  {
-    service: 'Baño de color',
-    date: 'Lun, 13 oct',
-    time: '12:30',
-    status: 'No asistió',
-    tone: 'red',
-    detail: 'La cita quedó registrada como inasistencia',
-  },
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
 //  COMPONENTE
 // ─────────────────────────────────────────────────────────────────────────────
 export default function MisCitasScreen({ onNavigateToAgendar }: Props) {
-  const { appointments, clientProfile } = useSalon();
-  const dias = useMemo(() => generar4DiasProximos(), []);
+  const { appointments, occupiedSlots, salonHours, clientProfile, updateAppointmentPayment, switchPaymentToCash } = useSalon();
+  const dias = useMemo(() => generar4DiasProximos(occupiedSlots, salonHours), [occupiedSlots, salonHours]);
   const [selectedIso, setSelectedIso] = useState<string>(dias[0]?.iso ?? '');
+
+  // Estado para el modal de Mercado Pago
+  const [selectedAptForPayment, setSelectedAptForPayment] = useState<AppointmentItem | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+
+  // Reloj en tiempo real para el temporizador de 15 minutos en citas pendientes
+  const [nowTime, setNowTime] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const diaActual = dias.find((d) => d.iso === selectedIso) ?? dias[0];
 
-  // Citas de la clienta actual
-  const clientAppointments = appointments.filter(a => a.client === clientProfile.name);
+  // Citas reales de la clienta actual (ya filtradas por cliente_id en SalonContext)
+  const clientAppointments = appointments;
 
   function handleSolicitarEsteDia() {
     if (!diaActual) return;
@@ -281,7 +285,7 @@ export default function MisCitasScreen({ onNavigateToAgendar }: Props) {
           activeOpacity={0.88}
         >
           <Text style={p.buttonText}>
-            Solicitar este día ({diaActual ? `${diaActual.dayName} ${diaActual.dayNum}` : ''})
+            Solicitar este día
           </Text>
         </TouchableOpacity>
 
@@ -295,7 +299,7 @@ export default function MisCitasScreen({ onNavigateToAgendar }: Props) {
         </TouchableOpacity>
 
         <Text style={styles.helper}>
-          Los datos son una demostración; todavía no se envían al salón.
+          La disponibilidad se calcula en tiempo real con la agenda de Yoss.
         </Text>
       </View>
 
@@ -306,7 +310,15 @@ export default function MisCitasScreen({ onNavigateToAgendar }: Props) {
           action={`${clientAppointments.length} registros`}
         />
         <View style={styles.list}>
-          {clientAppointments.map((item, i) => (
+          {clientAppointments.length === 0 ? (
+            <View style={[p.card, { alignItems: 'center', paddingVertical: 28, gap: 6 }]}>
+              <Text style={{ fontSize: 28 }}>🗓️</Text>
+              <Text style={styles.service}>Aún no tienes citas registradas</Text>
+              <Text style={[p.muted, { textAlign: 'center' }]}>
+                Selecciona un día arriba o toca "Agendar cita en otra fecha" para reservar tu primera visita.
+              </Text>
+            </View>
+          ) : clientAppointments.map((item, i) => (
             <View key={`${item.id}-${i}`} style={[p.card, styles.appointmentCard]}>
               <View style={p.row}>
                 <View style={styles.serviceBadge}>
@@ -324,6 +336,88 @@ export default function MisCitasScreen({ onNavigateToAgendar }: Props) {
               </View>
 
               <Text style={styles.detail}>{item.detail}</Text>
+
+              {/* ── ALERTA DE ANTICIPO PENDIENTE CON TEMPORIZADOR Y CAMBIO A EFECTIVO ── */}
+              {item.status === 'Pendiente anticipo' && (() => {
+                const diffSec = item.expiresAt ? Math.max(0, Math.floor((item.expiresAt - nowTime) / 1000)) : null;
+                const isExpired = diffSec !== null && diffSec <= 0;
+                const min = diffSec !== null ? Math.floor(diffSec / 60) : 0;
+                const sec = diffSec !== null ? diffSec % 60 : 0;
+                const timeStr = `${min}:${sec < 10 ? '0' : ''}${sec}`;
+
+                if (isExpired) {
+                  return (
+                    <View style={styles.anticipoExpiredBox}>
+                      <Text style={styles.anticipoExpiredIcon}>⏱️</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.anticipoExpiredTitle}>Tiempo de apartado agotado (15 min)</Text>
+                        <Text style={styles.anticipoExpiredSub}>
+                          El horario ha sido liberado para permitir que otra clienta pueda agendar. Puedes volver a solicitar tu cita en cualquier momento.
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                }
+
+                return (
+                  <View style={styles.anticipoActionBox}>
+                    <View style={styles.anticipoActionHeader}>
+                      <Text style={styles.anticipoActionIcon}>💳</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.anticipoActionTitle}>Anticipo pendiente con Mercado Pago</Text>
+                        <Text style={styles.anticipoActionSub}>
+                          Para asegurar tu turno y fórmulas, completa tu anticipo. Tu cita se valida y aprueba automáticamente.
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Temporizador de límite de tiempo (15 min) */}
+                    {diffSec !== null && (
+                      <View style={styles.countdownBadge}>
+                        <Text style={styles.countdownIcon}>⏱️</Text>
+                        <Text style={styles.countdownText}>
+                          Tiempo para asegurar tu lugar:{' '}
+                          <Text style={styles.countdownBold}>{timeStr} min</Text>
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Botón Pagar Mercado Pago */}
+                    <TouchableOpacity
+                      style={styles.anticipoPagarBtn}
+                      onPress={() => {
+                        setSelectedAptForPayment(item);
+                        setShowPaymentModal(true);
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.anticipoPagarBtnIcon}>💙</Text>
+                      <Text style={styles.anticipoPagarBtnText}>
+                        Pagar anticipo con Mercado Pago (${item.depositAmount || 300} MXN)
+                      </Text>
+                      <Text style={styles.anticipoPagarBtnArrow}>→</Text>
+                    </TouchableOpacity>
+
+                    {/* Opción de cambiar a Efectivo antes de que expire el tiempo */}
+                    {item.canSwitchToCash && (
+                      <TouchableOpacity
+                        style={styles.switchCashBtn}
+                        onPress={() => switchPaymentToCash(item.id)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.switchCashBtnIcon}>💵</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.switchCashBtnTitle}>Cambiar a pago en Efectivo (en salón)</Text>
+                          <Text style={styles.switchCashBtnSub}>
+                            ¿Te equivocaste de método? Confirma tu cita al instante y paga al acudir al salón
+                          </Text>
+                        </View>
+                        <Text style={styles.switchCashBtnArrow}>✓</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })()}
 
               {item.status === 'En proceso' && (
                 <View style={styles.progress}>
@@ -346,6 +440,34 @@ export default function MisCitasScreen({ onNavigateToAgendar }: Props) {
           ⚠️  Acumular 3 cancelaciones suspende temporalmente tu cuenta. Si necesitas cancelar, hazlo con al menos 24 h de anticipación.
         </Text>
       </View>
+
+      {/* ── Modal Oficial de Mercado Pago ── */}
+      <MercadoPagoModal
+        visible={showPaymentModal && !!selectedAptForPayment}
+        onClose={() => {
+          setShowPaymentModal(false);
+          setSelectedAptForPayment(null);
+        }}
+        servicioNombre={selectedAptForPayment?.service}
+        fechaHora={
+          selectedAptForPayment
+            ? `${selectedAptForPayment.date} · ${selectedAptForPayment.time}`
+            : undefined
+        }
+        montoAnticipo={selectedAptForPayment?.depositAmount || 300}
+        clienteNombre={clientProfile.name}
+        onConfirmPayment={note => {
+          if (selectedAptForPayment) {
+            updateAppointmentPayment(selectedAptForPayment.id, note);
+          }
+          setShowPaymentModal(false);
+          setSelectedAptForPayment(null);
+        }}
+        onPayLater={() => {
+          setShowPaymentModal(false);
+          setSelectedAptForPayment(null);
+        }}
+      />
     </ScrollView>
   );
 }
@@ -512,6 +634,37 @@ const styles = StyleSheet.create({
   },
   progressText: { color: '#946200', fontSize: 10, fontWeight: '600' },
 
+  // ── Alerta y Botón de Anticipo Mercado Pago en Mis Citas ──
+  anticipoActionBox: {
+    backgroundColor: '#F3F8FB',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#B3E5FC',
+    padding: 12,
+    gap: 10,
+  },
+  anticipoActionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  anticipoActionIcon: { fontSize: 18, marginTop: 1 },
+  anticipoActionTitle: { fontSize: 12, fontWeight: '700', color: '#0277BD' },
+  anticipoActionSub: { fontSize: 11, color: colors.ink[700], marginTop: 2, lineHeight: 15 },
+  anticipoPagarBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#009EE3',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: borderRadius.pill,
+    ...shadow.button,
+  },
+  anticipoPagarBtnIcon: { fontSize: 16 },
+  anticipoPagarBtnText: { flex: 1, color: colors.white, fontSize: 12, fontWeight: '800' },
+  anticipoPagarBtnArrow: { color: colors.white, fontSize: 16, fontWeight: '800' },
+
   // ── Regla de cancelaciones ──
   cancelNote: {
     backgroundColor: '#FFFBEB',
@@ -526,5 +679,84 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#B45309',
     lineHeight: 17,
+  },
+
+  // ── Expiración y cambio a efectivo ──
+  anticipoExpiredBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
+    borderRadius: 14,
+    padding: 12,
+  },
+  anticipoExpiredIcon: {
+    fontSize: 22,
+  },
+  anticipoExpiredTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#991B1B',
+  },
+  anticipoExpiredSub: {
+    fontSize: 11,
+    color: '#7F1D1D',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  countdownBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: borderRadius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    alignSelf: 'flex-start',
+  },
+  countdownIcon: {
+    fontSize: 13,
+  },
+  countdownText: {
+    fontSize: 11,
+    color: '#92400E',
+    fontWeight: '500',
+  },
+  countdownBold: {
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  switchCashBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.primary[300],
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  switchCashBtnIcon: {
+    fontSize: 18,
+  },
+  switchCashBtnTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary[700],
+  },
+  switchCashBtnSub: {
+    fontSize: 10,
+    color: colors.ink[700],
+    marginTop: 1,
+  },
+  switchCashBtnArrow: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.primary[600],
   },
 });
